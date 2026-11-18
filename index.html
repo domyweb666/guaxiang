@@ -513,6 +513,22 @@ function render(R){
   }
   const others = R.rules.filter(r => r.part !== "三停");
 
+  // 十二宮
+  const PAL = (RULES.palaces || []).map(g => {
+    const m = g.measure;
+    if (!m) return { g, status:"不判", line: g.why };
+    if (g.blockedBy === "nose_surgery" && R.answers?.noseSurgery) return { g, status:"不判", line:"你勾了鼻子動過，原典假設臉是天生的。" };
+    if (g.blockedBy === "brow_tattoo" && R.answers?.browTattoo) return { g, status:"不判", line:"你勾了紋眉或修眉，眉形是選出來的，不是天生的。" };
+    if (m.type === "santing"){
+      if (!stRule) return { g, status:"不判", line:"沒有拉髮際線，量不到臉的上段。" };
+      const ok = stRule.id === "santing-equal";
+      return { g, status: ok ? "成" : "不成", line: ok ? m.yes : m.no };
+    }
+    const t = test(R.F, m);
+    if (t.pass === null || t.pass === undefined) return { g, status:"不判", line:"量測資料不足。" };
+    return { g, status: t.pass ? "成" : "不成", line: t.pass ? m.yes : m.no, edge: t.edge, unstable: t.unstable };
+  });
+
   // 重點
   const pts = [];
   pts.push(`<b>臉形：${wx.host}形人</b>。${T[wx.host].plainShape}。古書說：${T[wx.host].plainLine}`);
@@ -520,6 +536,10 @@ function render(R){
   pts.push(`<b>五官：${ok.length} 個合格</b>。${ok.length ? names(ok) + "合古書的標準" : "沒有一個合古書的標準"}${bad.length ? "；" + names(bad) + "不合" : ""}${na.length ? "；" + names(na) + "這次沒判" : ""}。${W.guan}`);
   if (stHead) pts.push(`<b>臉的三段</b>：${stHead}`);
   else pts.push(`<b>臉的三段</b>：沒有拉髮際線，這次沒判。`);
+  if (PAL.length){
+    const pOk = PAL.filter(x => x.status === "成"), pBad = PAL.filter(x => x.status === "不成"), pNa = PAL.filter(x => x.status === "不判");
+    pts.push(`<b>十二宮：量得到 ${pOk.length + pBad.length} 宮</b>。${pOk.length ? pOk.map(x => x.g.topic).join("、") + "合古書的標準" : ""}${pOk.length && pBad.length ? "；" : ""}${pBad.length ? pBad.map(x => x.g.topic).join("、") + "不合" : ""}${pOk.length || pBad.length ? "。" : ""}其他 ${pNa.length} 宮（像是感情、工作）古書要看飽滿、光澤和紋路，相機量不準，這次沒判。`);
+  }
   others.forEach(r => pts.push(`<b>${esc(r.headline || r.part)}</b>${r.experimental ? "（實驗項目，網頁版量不準）" : ""}`));
 
   el.innerHTML = `
@@ -575,6 +595,20 @@ function render(R){
       <div style="height:10px;background:var(--fill);border-radius:99px;margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, s.v/1.4*100).toFixed(0)}%;background:var(--accent)"></i></div></div>`).join("")}
     <div class="block"><p class="quote">${esc(stRule.yuanwen)}</p><p class="small">${esc(stRule.baihua)}</p><p class="src">${esc(stRule.source)}</p></div>
   </div>` : `<div class="card"><div class="block small">沒有拉髮際線，上段量不到，這次沒判。有瀏海的話，撥開再掃一次就能看。</div></div>`}
+
+
+  <h2>十二宮：人生十二件事</h2>
+  <div class="card"><div class="block">${esc(RULES.palacesNote)}</div></div>
+  ${PAL.map(x => `
+  <div class="card">
+    <details>
+      <summary><div style="flex:1"><div>${tag(x.status)}<b>${esc(x.g.topic)}</b><span class="small">　${esc(x.g.name)}${x.g.modern ? "（現代叫" + esc(x.g.modern) + "）" : ""}</span></div><div class="small" style="margin-top:4px">${esc(x.line)}</div></div></summary>
+      <div class="block"><div class="small" style="margin-bottom:4px">在臉上哪裡</div>${esc(x.g.where)}</div>
+      ${x.g.measure ? `<div class="block"><div class="small" style="margin-bottom:4px">你的結果</div>${x.status === "不判" ? esc(x.line) : (x.status === "成" ? "✓ " : "✗ ") + esc(x.line)}${x.edge ? `<div class="small warn">剛好在標準線附近，換個光線再掃可能會變</div>` : ""}${x.unstable ? `<div class="small warn">30 張畫面之間差很多，只當參考</div>` : ""}${x.g.notMeasured ? `<div class="small" style="margin-top:6px">${esc(x.g.notMeasured)}</div>` : ""}</div>` : `<div class="block"><div class="small" style="margin-bottom:4px">為什麼這次沒判</div>${esc(x.g.why)}</div>`}
+      ${x.g.yuanwen ? `<div class="block"><div class="small" style="margin-bottom:4px">古書怎麼說</div><p class="quote">${esc(x.g.yuanwen)}</p><p>${esc(x.g.baihua)}</p><p class="src" style="margin-top:6px">${esc(x.g.source)}</p></div>` : ""}
+      ${x.g.note ? `<div class="block small">${esc(x.g.note)}</div>` : ""}
+    </details>
+  </div>`).join("")}
 
   ${others.length ? `<h2>其他古書條文</h2>` : ""}
   ${others.map(r => `
