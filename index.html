@@ -107,13 +107,16 @@ details[open] summary::after{transform:rotate(-90deg)}
 <!-- 2 掃描前三題 -->
 <section class="screen" id="consent">
   <h1>掃描前</h1>
-  <p class="lead">這三題會決定哪些項目能看、哪些不看。</p>
+  <p class="lead">前兩項要打勾才能開始，後兩題決定哪些項目不看。</p>
   <div class="card">
     <label class="chk"><input type="checkbox" id="q18"><span>我已滿 18 歲，而且要掃的是我自己的臉</span></label>
+    <label class="chk"><input type="checkbox" id="qGlass"><span>我已經拿下眼鏡<br><span class="small">眼鏡框會擋住眉尾和眼角，鏡片會讓眼睛看起來變大或變小，量出來會不準。隱形眼鏡可以戴。</span></span></label>
+  </div>
+  <div class="card">
     <label class="chk"><input type="checkbox" id="qBrow"><span>我有紋眉、霧眉，或眉毛修過很多</span></label>
     <label class="chk"><input type="checkbox" id="qNose"><span>我的鼻子動過手術或打過填充</span></label>
   </div>
-  <div class="card"><div class="block small">建議：白天、面向窗戶，不要背光。不用笑，自然放鬆。眼鏡可以先拿下來。</div></div>
+  <div class="card"><div class="block small">建議：白天、面向窗戶，不要背光。不用笑，自然放鬆。</div></div>
   <button class="btn" id="goScan" disabled>打開相機</button>
   <p class="small" style="margin:0 6px">按下後手機會詢問相機權限。畫面只在手機上處理。</p>
 </section>
@@ -125,11 +128,11 @@ details[open] summary::after{transform:rotate(-90deg)}
     <svg id="ovl" viewBox="0 0 300 400" preserveAspectRatio="none">
       <ellipse id="oval" cx="150" cy="190" rx="92" ry="128" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="4" stroke-dasharray="8 6"/>
     </svg>
-    <div class="hint" id="hint">把臉放進框裡</div>
+    <div class="hint" id="hint">拿下眼鏡，把臉放進框裡</div>
   </div>
   <div class="progress"><i id="bar"></i></div>
   <div class="scaninfo small"><span id="count">0</span> / 30 張合格畫面</div>
-  <div class="scaninfo" id="tip"><div class="card" style="margin:14px 16px"><div class="block small">卡住了嗎？面向窗戶、手機拿在眼睛高度、臉佔框的大半，表情放鬆不用笑。</div></div></div>
+  <div class="scaninfo" id="tip"><div class="card" style="margin:14px 16px"><div class="block small">卡住了嗎？確認眼鏡拿下來了、面向窗戶、手機拿在眼睛高度、臉佔框的大半，表情放鬆不用笑。</div></div></div>
   <div style="padding:0 16px"><button class="btn ghost" id="cancelScan">取消</button></div>
 </section>
 
@@ -166,9 +169,10 @@ const S = { frames: [], best: null, bestScore: 1e9, bestW: 0, bestH: 0, answers:
 
 // ---------- 開場 ----------
 $("#goConsent").onclick = () => show("consent");
-$("#q18").onchange = e => $("#goScan").disabled = !e.target.checked;
+const gate = () => $("#goScan").disabled = !($("#q18").checked && $("#qGlass").checked);
+$("#q18").onchange = gate; $("#qGlass").onchange = gate;
 $("#goScan").onclick = async () => {
-  S.answers = { browTattoo: $("#qBrow").checked, noseSurgery: $("#qNose").checked };
+  S.answers = { browTattoo: $("#qBrow").checked, noseSurgery: $("#qNose").checked, noGlasses: $("#qGlass").checked };
   try { await startScan(); } catch (err) { loading(false); alert("相機或模型無法啟動：" + err.message); show("consent"); }
 };
 $("#cancelScan").onclick = () => { stopCam(); show("consent"); };
@@ -233,7 +237,7 @@ function processFrame(v, ts){
   const r = landmarker.detectForVideo(v, ts);
   const faces = r.faceLandmarks || [];
   let msg = null;
-  if (faces.length === 0) msg = "把臉放進框裡";
+  if (faces.length === 0) msg = "拿下眼鏡，把臉放進框裡";
   else if (faces.length > 1) msg = "請確定畫面裡只有你";
   let lm, pose, cats, br;
   if (!msg){
@@ -470,84 +474,143 @@ const slim = r => ({ ...r, officials: r.officials.map(x => ({ id:x.o.id, status:
 
 function render(R){
   const el = $("#report");
-  const wx = R.wx, W = RULES.wuxing;
-  const cnt = s => R.officials.filter(x => x.status === s).length;
-  const tag = s => s === "成" ? `<span class="tag t-ok">成</span>` : s === "不成" ? `<span class="tag t-bad">不成</span>` : `<span class="tag t-na">不判</span>`;
+  const wx = R.wx, W = RULES.wuxing, T = W.types;
+  const OF = R.officials;
+  const byS = s => OF.filter(x => x.status === s);
+  const names = arr => arr.map(x => x.o.plain).join("、");
+  const tag = s => s === "成" ? `<span class="tag t-ok">合格</span>` : s === "不成" ? `<span class="tag t-bad">不合格</span>` : `<span class="tag t-na">沒判</span>`;
   const unstableList = Object.entries(R.F).filter(([k,o]) => o.unstable && RULES.features[k]).map(([k]) => RULES.features[k].name);
+  const offLine = x => {
+    if (x.status === "不判") return x.why;
+    if (x.status === "成") return x.rows.map(r => r.c.yes).join("，");
+    return x.rows.filter(r => !r.pass).map(r => r.c.no).join("，");
+  };
+  const n2 = v => Number.isFinite(v) ? v.toFixed(2) : "—";
+
+  // 命格的理由（照本工具暫定的計分方式描述）
+  const A = R.F.face_aspect?.v, FR = R.F.fore_jaw?.v, J = R.F.jaw_angle?.v;
+  const why = {
+    "木": `你的臉長是寬的 ${n2(A)} 倍，比例偏長。`,
+    "金": `額頭和下顎差不多寬（額寬是下顎的 ${n2(FR)} 倍），下顎角 ${J?.toFixed(0)}°，偏方。`,
+    "火": `額頭比下顎窄（額寬只有下顎的 ${n2(FR)} 倍），上窄下寬。`,
+    "水": `臉長只有寬的 ${n2(A)} 倍，下顎角 ${J?.toFixed(0)}°，偏圓。`,
+    "土": `臉長只有寬的 ${n2(A)} 倍，下巴那一段偏長，看起來厚實。`
+  }[wx.host];
+  const relPlain = wx.rel ? ({ "客生主": `${wx.guest}生${wx.host}（五行相生）`, "客剋主": `${wx.guest}剋${wx.host}（五行相剋）`, "主剋客": `${wx.host}剋${wx.guest}（五行相剋）`, "主生客": `${wx.host}生${wx.guest}（五行相生）` })[wx.rel.kind] : "";
+
+  // 三停
+  const seg = R.hasHair ? [
+    { k:"上段", part:"額頭：髮際到眉心", life:"初年", v:R.F.santing_U.v },
+    { k:"中段", part:"眉心到鼻子底", life:"中年", v:R.F.santing_M.v },
+    { k:"下段", part:"鼻子底到下巴", life:"晚年", v:R.F.santing_L.v } ] : null;
+  const stRule = R.rules.find(r => r.part === "三停");
+  let stHead = "";
+  if (seg && stRule){
+    const s = [...seg].sort((a,b) => b.v - a.v);
+    stHead = stRule.id === "santing-equal"
+      ? "臉的上、中、下三段差不多長。古書說這樣一生各段比較平穩。"
+      : `臉的三段裡，${s[0].k}（${s[0].part}）最長，${s[2].k}最短。古書說長的那段人生（${s[0].life}）比較順，短的那段（${s[2].life}）比較辛苦。`;
+  }
+  const others = R.rules.filter(r => r.part !== "三停");
+
+  // 重點
+  const pts = [];
+  pts.push(`<b>臉形：${wx.host}形人</b>。${T[wx.host].plainShape}。古書說：${T[wx.host].plainLine}`);
+  const ok = byS("成"), bad = byS("不成"), na = byS("不判");
+  pts.push(`<b>五官：${ok.length} 個合格</b>。${ok.length ? names(ok) + "合古書的標準" : "沒有一個合古書的標準"}${bad.length ? "；" + names(bad) + "不合" : ""}${na.length ? "；" + names(na) + "這次沒判" : ""}。${W.guan}`);
+  if (stHead) pts.push(`<b>臉的三段</b>：${stHead}`);
+  else pts.push(`<b>臉的三段</b>：沒有拉髮際線，這次沒判。`);
+  others.forEach(r => pts.push(`<b>${esc(r.headline || r.part)}</b>${r.experimental ? "（實驗項目，網頁版量不準）" : ""}`));
 
   el.innerHTML = `
   <h1>你的面相</h1>
-  <p class="lead">${new Date(R.when).toLocaleDateString("zh-TW")}・${R.frames} 張合格畫面的中位數</p>
+  <p class="lead">${new Date(R.when).toLocaleDateString("zh-TW")}・從 ${R.frames} 張畫面量出來</p>
 
-  <h2>這次看不到的</h2>
   <div class="card">
-    <div class="block small">算命先生當面看你，看的不只是臉的形狀。這些照片拍不到，所以這份報告不假裝看到了。</div>
-    ${RULES.cannotSee.map(c => `<div class="row"><span>${c.name}</span><span class="v small" style="max-width:68%;text-align:right">${c.why}</span></div>`).join("")}
-    ${!R.hasHair ? `<div class="row"><span>三停</span><span class="v small">沒有髮際線，上停量不到</span></div>` : ""}
-    ${S.answers.browTattoo ? `<div class="row"><span>眉</span><span class="v small">你勾了紋眉／修眉</span></div>` : ""}
-    ${S.answers.noseSurgery ? `<div class="row"><span>鼻</span><span class="v small">你勾了鼻子動過</span></div>` : ""}
-    ${unstableList.length ? `<div class="block small warn">這幾項在 30 張畫面之間變動大，結果只當參考：${unstableList.join("、")}</div>` : ""}
+    <div class="block"><div style="font-size:20px;font-weight:700;margin-bottom:10px">古書怎麼說你</div>
+      ${pts.map(p => `<p style="margin:10px 0">${p}</p>`).join("")}
+      <p class="small" style="margin-top:12px">這些都是古代相書的說法，沒有經過科學驗證。這次只看臉的形狀，古書還要看的眼神、氣色、聲音、頭形、身材、耳朵，這次都沒看（最下面有原因）。往下滑，每一項都有「怎麼看出來的」。</p>
+      ${unstableList.length ? `<p class="small warn" style="margin-top:8px">有幾項在 30 張畫面之間差很多，結果只當參考：${unstableList.join("、")}。</p>` : ""}
+    </div>
   </div>
 
-  <h2>命格卡</h2>
+  <h2>臉形：${wx.host}形人</h2>
   <div class="card">
     <div class="mingge">
-      <div class="kind">臉形推估・五行形</div>
+      <div class="kind">古書把人分成金、木、水、火、土五種形</div>
       <div class="big">${wx.host}形人</div>
-      <div class="kind">${wx.guest ? `兼帶${wx.guest}形` : "沒有明顯的兼形"}${wx.weak ? "・特徵不明顯，接近中間型" : ""}</div>
-      <p class="quote" style="margin-top:14px">${W.types[wx.host].yuanwen}</p>
-      <p class="src">${W.source}</p>
+      <div class="kind">${wx.guest ? `也帶一點${wx.guest}形` : "沒有明顯帶別的形"}${wx.weak ? "・特徵不明顯，接近中間型" : ""}</div>
+      <p class="quote" style="margin-top:14px">${T[wx.host].yuanwen}</p>
+      <p style="margin-top:4px">${T[wx.host].plainLine}</p>
+      <p class="src" style="margin-top:6px">${W.source}</p>
     </div>
-    ${wx.rel ? `<div class="block"><b>${wx.host}形帶${wx.guest}：${wx.rel.kind}</b>${wx.rel.lines.map(l => `<div class="small" style="margin-top:6px">${esc(l)}</div>`).join("")}${wx.rel.kind.includes("剋") ? `<div class="small" style="margin-top:6px">兩本古書對相剋的看法剛好相反（5-E）。</div>` : ""}</div>` : ""}
-    <div class="block small">古書說「${W.summary}」，又說「${W.notFault}」：每一形本來的樣子，在那一形身上不算缺點。<br>這是只看臉形的推估。五行形本來是全身相，要看身形、膚色才完整。</div>
-  </div>
-
-  <h2>面相標註圖</h2>
-  <div class="card annot">
-    <div class="seg"><button class="on" data-m="photo">照片</button><button data-m="line">只看線條</button></div>
-    <canvas id="annot"></canvas>
+    <div class="block"><div class="small">怎麼看出來的</div>${why}五形裡最接近${wx.host}形（${T[wx.host].plainShape}）。<div class="small" style="margin-top:6px">古書只說「金方、木瘦、水圓、火尖、土厚」，沒有給數字。用多少比例算哪一形，是本工具暫定的算法。</div></div>
+    ${wx.rel ? `<div class="block"><div class="small">你主要是${wx.host}形，也帶一點${wx.guest}形：${relPlain}</div>${wx.rel.lines.map(l => `<div style="margin-top:6px">${esc(l)}</div>`).join("")}${wx.rel.kind.includes("剋") ? `<div class="small" style="margin-top:6px">兩本古書對這一組的看法剛好相反，所以兩種都列出來。</div>` : ""}</div>` : ""}
+    <div class="block small">${W.notFaultPlain}<br>另外，五行形本來要看全身和膚色，這裡只看臉形，所以只是推估。</div>
   </div>
 
   <h2>五官</h2>
   <div class="card">
-    <div class="block">成 ${cnt("成")}・不成 ${cnt("不成")}・不判 ${cnt("不判")}
-      <div class="small" style="margin-top:4px">古書說「一官成，十年之貴顯」。「不判」的官不能當成「成」來算，「十年」也只是概數。</div></div>
+    <div class="block">${W.guan}
+      <div class="small" style="margin-top:6px">「沒判」的不能當成合格來算；「十年」也只是概數。點每一項看細節。</div></div>
   </div>
-  ${R.officials.map(x => `
+  ${OF.map(x => `
   <div class="card">
     <details>
-      <summary><span>${tag(x.status)}${x.o.name}（${x.o.organ}）</span></summary>
-      ${x.why ? `<div class="block small">${esc(x.why)}</div>` : ""}
-      ${x.rows.map(r => `<div class="row"><span>${r.c.label}${r.unstable ? ' <span class="tag t-edge">不穩</span>' : ""}${r.edge ? ' <span class="tag t-edge">邊緣</span>' : ""}</span><span class="v">${fmt(r.c.feature, r.x)} ${r.c.op} ${fmt(r.c.feature, r.t)} ${r.pass ? "✓" : "✗"}</span></div>`).join("")}
-      ${x.o.notMeasured ? `<div class="block small">量不到：${x.o.notMeasured.join("、")}${x.status === "成" ? "。所以這裡的「成」只代表量得到的幾條合格。" : ""}</div>` : ""}
-      <div class="block"><p class="quote">${esc(x.o.yuanwen)}</p><p>${esc(x.o.baihua)}</p><p class="src">${esc(x.o.source)}・文獻 ${esc(x.o.lit)}</p></div>
+      <summary><div style="flex:1"><div>${tag(x.status)}<b>${x.o.plain}</b></div><div class="small" style="margin-top:4px">${esc(offLine(x))}</div></div></summary>
+      <div class="block small">${esc(x.o.governs)}</div>
+      ${x.rows.length ? `<div class="block"><div class="small" style="margin-bottom:6px">你的結果</div>${x.rows.map(r => `<div style="margin:6px 0">${r.pass ? "✓" : "✗"} ${esc(r.pass ? r.c.yes : r.c.no)}${r.edge ? `<div class="small warn">剛好在標準線附近，換個光線再掃可能會變</div>` : ""}${r.unstable ? `<div class="small warn">30 張畫面之間差很多，只當參考</div>` : ""}</div>`).join("")}</div>` : ""}
+      ${x.o.notMeasured ? `<div class="block small">古書還要看、但相機量不到的：${x.o.notMeasured.join("、")}。${x.status === "成" ? "所以這裡的合格，只代表量得到的幾條合格。" : ""}</div>` : ""}
+      <div class="block"><div class="small" style="margin-bottom:4px">古書的合格標準</div>${esc(x.o.baihua)}<p class="src" style="margin-top:6px">${esc(x.o.source)}・文獻 ${esc(x.o.lit)}</p></div>
+      ${x.rows.length ? `<div class="block small">看數字：${x.rows.map(r => `${esc(r.c.label)} ${fmt(r.c.feature, r.x)}（標準 ${r.c.op} ${fmt(r.c.feature, r.t)}）`).join("；")}</div>` : ""}
     </details>
   </div>`).join("")}
 
-  ${R.hasHair ? `
-  <h2>三停</h2>
+  <h2>臉的三段（三停）</h2>
+  ${seg ? `
   <div class="card">
-    <div class="row">上停（初年）<span class="v">${fmt("santing_U", R.F.santing_U.v)}</span></div>
-    <div class="row">中停（中年）<span class="v">${fmt("santing_M", R.F.santing_M.v)}</span></div>
-    <div class="row">下停（晚年）<span class="v">${fmt("santing_L", R.F.santing_L.v)}</span></div>
-    ${(() => { const r = R.rules.find(r => r.part === "三停"); if (!r) return "";
-      const longest = [["上停",R.F.santing_U.v],["中停",R.F.santing_M.v],["下停",R.F.santing_L.v]].sort((a,b)=>b[1]-a[1])[0][0];
-      return `<div class="block">${r.id === "santing-long" ? `<b>${longest}最長</b><br>` : "<b>三停大致平等</b><br>"}<p class="quote">${esc(r.yuanwen)}</p><p>${esc(r.baihua)}</p><p class="src">${esc(r.source)}</p></div>`; })()}
-  </div>` : ""}
+    <div class="block">${stHead}</div>
+    ${seg.map(s => `<div class="block"><div style="display:flex;justify-content:space-between"><span><b>${s.k}</b>・管${s.life}</span><span class="small">${s.v < 0.95 ? "偏短" : s.v > 1.05 ? "偏長" : "接近平均"}</span></div>
+      <div class="small">${s.part}</div>
+      <div style="height:10px;background:var(--fill);border-radius:99px;margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, s.v/1.4*100).toFixed(0)}%;background:var(--accent)"></i></div></div>`).join("")}
+    <div class="block"><p class="quote">${esc(stRule.yuanwen)}</p><p class="small">${esc(stRule.baihua)}</p><p class="src">${esc(stRule.source)}</p></div>
+  </div>` : `<div class="card"><div class="block small">沒有拉髮際線，上段量不到，這次沒判。有瀏海的話，撥開再掃一次就能看。</div></div>`}
 
-  ${R.rules.filter(r => r.part !== "三停").length ? `<h2>其他古書條文</h2>` : ""}
-  ${R.rules.filter(r => r.part !== "三停").map(r => `
-  <div class="card"><div class="block"><b>${esc(r.part)}</b>${r.experimental ? ' <span class="tag t-edge">實驗</span>' : ""}<p class="quote">${esc(r.yuanwen)}</p><p>${esc(r.baihua)}</p><p class="src">${esc(r.source)}・文獻 ${esc(r.lit)}</p></div></div>`).join("")}
+  ${others.length ? `<h2>其他古書條文</h2>` : ""}
+  ${others.map(r => `
+  <div class="card"><div class="block"><b>${esc(r.headline || r.part)}</b>${r.experimental ? ' <span class="tag t-edge">實驗</span>' : ""}
+    <p style="margin-top:6px">${esc(r.baihua)}</p>${r.yuanwen ? `<p class="quote">${esc(r.yuanwen)}</p>` : ""}${r.note ? `<p class="small">${esc(r.note)}</p>` : ""}<p class="src">${esc(r.source)}・文獻 ${esc(r.lit)}</p></div></div>`).join("")}
 
-  <h2>數學</h2>
-  <div class="card"><div class="block">
+  <h2>標註圖</h2>
+  <div class="card annot">
+    <div class="seg"><button class="on" data-m="photo">照片</button><button data-m="line">只看線條</button></div>
+    <canvas id="annot"></canvas>
+    <div class="block small"><span style="color:#AF52DE">●</span> 眉毛　<span style="color:#007AFF">●</span> 眼睛　<span style="color:#34C759">●</span> 鼻子　<span style="color:#FF2D55">●</span> 嘴巴　<span style="color:#FF9500">━</span> 三段的分界線</div>
+  </div>
+
+  <h2>這次沒看的</h2>
+  <div class="card">
+    <details>
+      <summary><span>算命先生當面會看、照片拍不到的 ${RULES.cannotSee.length} 項</span></summary>
+      ${RULES.cannotSee.map(c => `<div class="block"><b>${c.plain}</b>（古書叫「${c.name}」）<div class="small" style="margin-top:4px">${esc(c.why)}</div></div>`).join("")}
+      ${!R.hasHair ? `<div class="block"><b>臉的上段</b><div class="small">沒有拉髮際線</div></div>` : ""}
+      ${R.answers?.browTattoo ? `<div class="block"><b>眉毛</b><div class="small">你勾了紋眉或修眉</div></div>` : ""}
+      ${R.answers?.noseSurgery ? `<div class="block"><b>鼻子</b><div class="small">你勾了鼻子動過</div></div>` : ""}
+    </details>
+  </div>
+
+  <h2>數字明細</h2>
+  <div class="card"><details>
+    <summary><span>給想核對算法的人</span></summary>
+    <div class="block">
     <p class="small" style="margin-bottom:8px">每一項都是比例，不受臉離鏡頭遠近影響；數字是 ${R.frames} 張畫面的中位數，「波動」是四分位距。門檻是暫定值。</p>
     <table class="math"><tr><th>項目</th><th>數值</th><th>波動</th><th>算法</th></tr>
     ${Object.entries(R.F).filter(([k]) => RULES.features[k]).map(([k,o]) => `<tr><td>${RULES.features[k].name}${o.unstable ? ' <span class="tag t-edge">不穩</span>' : ""}</td><td class="n">${fmt(k,o.v)}</td><td class="n">${fmt(k,o.iqr)}</td><td class="small">${esc(RULES.features[k].formula)}</td></tr>`).join("")}
     <tr><td>五行計分</td><td class="n" colspan="2">${Object.entries(R.wx.scores).map(([k,v]) => `${k} ${v.toFixed(2)}`).join("<br>")}</td><td class="small">${esc(RULES.wuxing.note)}</td></tr>
     </table>
     <p class="small" style="margin-top:8px">平均光線亮度 ${R.light.toFixed(0)}／255</p>
-  </div></div>
+    </div>
+  </details></div>
 
   <button class="btn" id="again">再掃一次</button>
   <button class="btn ghost" id="exportJson">匯出數字（不含照片）</button>
