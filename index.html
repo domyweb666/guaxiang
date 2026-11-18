@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F2F2F7">
+<link rel="icon" href="data:,">
+<title>瓜相：掃一次臉，看懂古書怎麼說你</title>
+<style>
+:root{
+  --bg:#F2F2F7; --card:#FFFFFF; --text:#000; --sub:rgba(60,60,67,.6); --sep:rgba(60,60,67,.18);
+  --accent:#FF9500; --ok:#34C759; --bad:#FF3B30; --gray:#8E8E93; --fill:rgba(120,120,128,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#000; --card:#1C1C1E; --text:#fff; --sub:rgba(235,235,245,.6); --sep:rgba(84,84,88,.6);
+    --accent:#FF9F0A; --ok:#30D158; --bad:#FF453A; --gray:#8E8E93; --fill:rgba(120,120,128,.24); }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.screen{display:none;max-width:560px;margin:0 auto;padding:16px 16px 120px}
+.screen.on{display:block}
+h1{font-size:34px;font-weight:700;letter-spacing:.2px;margin:28px 4px 4px}
+h2{font-size:22px;font-weight:700;margin:28px 4px 10px}
+.lead{font-size:17px;color:var(--sub);margin:0 4px 18px;line-height:1.5}
+.card{background:var(--card);border-radius:26px;padding:4px 0;margin-bottom:14px;overflow:hidden}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:12px 18px;font-size:17px;line-height:1.45}
+.row+.row{border-top:.5px solid var(--sep);margin-left:18px;padding-left:0}
+.row .v{color:var(--sub);text-align:right;flex-shrink:0}
+.block{padding:16px 18px;font-size:16px;line-height:1.6}
+.block+.block{border-top:.5px solid var(--sep)}
+.small{font-size:13px;color:var(--sub);line-height:1.5}
+.btn{display:block;width:100%;border:0;border-radius:999px;background:var(--accent);color:#fff;font-size:17px;font-weight:600;padding:16px;margin:14px 0;cursor:pointer;font-family:inherit}
+.btn.ghost{background:var(--fill);color:var(--text)}
+.btn:disabled{opacity:.4}
+.tag{display:inline-block;font-size:13px;font-weight:600;border-radius:8px;padding:2px 8px;margin-right:6px;vertical-align:1px}
+.t-ok{background:rgba(52,199,89,.16);color:var(--ok)}
+.t-bad{background:rgba(255,59,48,.14);color:var(--bad)}
+.t-na{background:var(--fill);color:var(--gray)}
+.t-edge{background:rgba(255,149,0,.16);color:var(--accent)}
+.quote{font-family:"Songti TC","Noto Serif TC",serif;font-size:17px;line-height:1.7;margin:6px 0}
+.src{font-size:13px;color:var(--sub)}
+label.chk{display:flex;gap:12px;align-items:flex-start;padding:14px 18px;font-size:17px;line-height:1.45}
+label.chk+label.chk{border-top:.5px solid var(--sep);margin-left:18px;padding-left:0}
+label.chk input{width:22px;height:22px;margin-top:2px;accent-color:var(--accent);flex-shrink:0}
+/* 掃臉 */
+#scan{padding:0}
+.camwrap{position:relative;width:100%;max-width:560px;margin:0 auto;aspect-ratio:3/4;background:#000;overflow:hidden}
+#video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ovl{position:absolute;inset:0;width:100%;height:100%}
+.hint{position:absolute;left:16px;right:16px;bottom:22px;text-align:center;color:#fff;font-size:20px;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.progress{height:8px;background:var(--fill);border-radius:99px;margin:18px 16px 6px;overflow:hidden}
+.progress>i{display:block;height:100%;width:0;background:var(--ok);transition:width .15s}
+.scaninfo{padding:0 16px;text-align:center}
+#tip{display:none}
+/* 髮際線 */
+.hairwrap{position:relative;width:100%;border-radius:26px;overflow:hidden;background:#000;touch-action:none}
+.hairwrap img{display:block;width:100%;transform:scaleX(-1)}
+#hairline{position:absolute;left:0;right:0;height:44px;margin-top:-22px;cursor:ns-resize}
+#hairline::after{content:"";position:absolute;left:0;right:0;top:21px;height:3px;background:var(--accent);box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+#hairline span{position:absolute;right:10px;top:-6px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;padding:3px 8px;border-radius:8px}
+/* 報告 */
+.mingge{text-align:center;padding:26px 18px 22px}
+.mingge .big{font-size:44px;font-weight:700;letter-spacing:2px;margin:6px 0}
+.mingge .kind{font-size:15px;color:var(--sub)}
+.annot{position:relative}
+.annot canvas{display:block;width:100%;height:auto}
+.seg{display:flex;background:var(--fill);border-radius:10px;padding:2px;margin:10px 18px 14px}
+.seg button{flex:1;border:0;background:transparent;font-size:14px;padding:7px;border-radius:8px;color:var(--text);font-family:inherit}
+.seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+table.math{width:100%;border-collapse:collapse;font-size:13px}
+table.math td,table.math th{padding:8px 6px;border-top:.5px solid var(--sep);text-align:left;vertical-align:top}
+table.math th{color:var(--sub);font-weight:600}
+table.math td:first-child{min-width:5.5em}
+table.math td.n{white-space:nowrap;font-variant-numeric:tabular-nums}
+details summary{cursor:pointer;list-style:none;padding:16px 18px;font-size:17px;display:flex;justify-content:space-between}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"›";color:var(--gray);transform:rotate(90deg);transition:transform .2s}
+details[open] summary::after{transform:rotate(-90deg)}
+.warn{color:var(--accent)}
+#loading{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9;font-size:17px;color:var(--sub)}
+#loading.on{display:flex}
+.spin{width:32px;height:32px;border:3px solid var(--fill);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div id="loadmsg">準備中</div></div>
+
+<!-- 1 開場 -->
+<section class="screen on" id="intro">
+  <h1>瓜相</h1>
+  <p class="lead">掃一次臉，看懂古書怎麼說你。</p>
+  <div class="card">
+    <div class="row">照片不離開你的手機<span class="v">✓</span></div>
+    <div class="row">每一句都附古籍出處<span class="v">✓</span></div>
+    <div class="row">看不到的地方，直接告訴你<span class="v">✓</span></div>
+  </div>
+  <p class="small" style="margin:0 6px">這是傳統文化解讀，不是科學測量，也不能替你做任何重大決定。</p>
+  <button class="btn" id="goConsent">開始</button>
+</section>
+
+<!-- 2 掃描前三題 -->
+<section class="screen" id="consent">
+  <h1>掃描前</h1>
+  <p class="lead">這三題會決定哪些項目能看、哪些不看。</p>
+  <div class="card">
+    <label class="chk"><input type="checkbox" id="q18"><span>我已滿 18 歲，而且要掃的是我自己的臉</span></label>
+    <label class="chk"><input type="checkbox" id="qBrow"><span>我有紋眉、霧眉，或眉毛修過很多</span></label>
+    <label class="chk"><input type="checkbox" id="qNose"><span>我的鼻子動過手術或打過填充</span></label>
+  </div>
+  <div class="card"><div class="block small">建議：白天、面向窗戶，不要背光。不用笑，自然放鬆。眼鏡可以先拿下來。</div></div>
+  <button class="btn" id="goScan" disabled>打開相機</button>
+  <p class="small" style="margin:0 6px">按下後手機會詢問相機權限。畫面只在手機上處理。</p>
+</section>
+
+<!-- 3 掃臉 -->
+<section class="screen" id="scan">
+  <div class="camwrap">
+    <video id="video" playsinline muted autoplay></video>
+    <svg id="ovl" viewBox="0 0 300 400" preserveAspectRatio="none">
+      <ellipse id="oval" cx="150" cy="190" rx="92" ry="128" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="4" stroke-dasharray="8 6"/>
+    </svg>
+    <div class="hint" id="hint">把臉放進框裡</div>
+  </div>
+  <div class="progress"><i id="bar"></i></div>
+  <div class="scaninfo small"><span id="count">0</span> / 30 張合格畫面</div>
+  <div class="scaninfo" id="tip"><div class="card" style="margin:14px 16px"><div class="block small">卡住了嗎？面向窗戶、手機拿在眼睛高度、臉佔框的大半，表情放鬆不用笑。</div></div></div>
+  <div style="padding:0 16px"><button class="btn ghost" id="cancelScan">取消</button></div>
+</section>
+
+<!-- 4 髮際線 -->
+<section class="screen" id="hair">
+  <h1>拉一條髮際線</h1>
+  <p class="lead">相機量不到髮際線。把橘色線拖到你額頭頭髮開始長的地方，三停才算得出來。</p>
+  <div class="hairwrap" id="hairwrap">
+    <img id="bestImg" alt="">
+    <div id="hairline"><span>髮際</span></div>
+  </div>
+  <button class="btn" id="hairOk">就是這裡</button>
+  <button class="btn ghost" id="hairSkip">我有瀏海，跳過</button>
+</section>
+
+<!-- 5 報告 -->
+<section class="screen" id="report"></section>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.mjs";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm";
+const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const NEED = 30;
+const DEBUG = new URLSearchParams(location.search).has("debug");
+const TESTMODE = new URLSearchParams(location.search).has("test"); // 開發用：略過表情檢查
+
+const $ = s => document.querySelector(s);
+const show = id => { document.querySelectorAll(".screen").forEach(e => e.classList.toggle("on", e.id === id)); window.scrollTo(0,0); };
+const loading = (on, msg="準備中") => { $("#loading").classList.toggle("on", on); $("#loadmsg").textContent = msg; };
+
+let RULES = null, landmarker = null, stream = null;
+const S = { frames: [], best: null, bestScore: 1e9, bestW: 0, bestH: 0, answers: {}, hairY: null, startT: 0, running: false };
+
+// ---------- 開場 ----------
+$("#goConsent").onclick = () => show("consent");
+$("#q18").onchange = e => $("#goScan").disabled = !e.target.checked;
+$("#goScan").onclick = async () => {
+  S.answers = { browTattoo: $("#qBrow").checked, noseSurgery: $("#qNose").checked };
+  try { await startScan(); } catch (err) { loading(false); alert("相機或模型無法啟動：" + err.message); show("consent"); }
+};
+$("#cancelScan").onclick = () => { stopCam(); show("consent"); };
+
+async function loadAll(){
+  if (!RULES) RULES = await (await fetch("rules.json", {cache:"no-cache"})).json();
+  if (landmarker) return;
+  loading(true, "第一次使用要下載臉部模型，約 4 MB");
+  const fs = await FilesetResolver.forVisionTasks(WASM);
+  const opts = d => ({ baseOptions:{ modelAssetPath: MODEL, delegate: d }, runningMode:"VIDEO", numFaces:2,
+    outputFaceBlendshapes:true, outputFacialTransformationMatrixes:true });
+  try { landmarker = await FaceLandmarker.createFromOptions(fs, opts("GPU")); }
+  catch(e){ landmarker = await FaceLandmarker.createFromOptions(fs, opts("CPU")); }
+}
+
+// ---------- 掃臉 ----------
+const off = document.createElement("canvas"); const offx = off.getContext("2d", { willReadFrequently:true });
+async function startScan(){
+  await loadAll();
+  loading(true, "打開相機");
+  stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user", width:{ideal:1280}, height:{ideal:960} }, audio:false });
+  const v = $("#video"); v.srcObject = stream; await v.play();
+  loading(false);
+  Object.assign(S, { frames:[], best:null, bestScore:1e9, hairY:null, startT:performance.now(), running:true });
+  $("#bar").style.width = "0%"; $("#count").textContent = "0"; $("#tip").style.display = "none";
+  show("scan");
+  let last = 0;
+  const loop = () => {
+    if (!S.running) return;
+    const now = performance.now();
+    if (now - last > 90 && v.readyState >= 2) { last = now; processFrame(v, now); }
+    if (now - S.startT > 60000) $("#tip").style.display = "block";
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+function stopCam(){ S.running = false; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
+
+function poseFromMatrix(m){
+  // column-major 4x4
+  const R = (i,j) => m[j*4+i];
+  const pitch = Math.atan2(R(2,1), R(2,2)) * 180/Math.PI;
+  const yaw = Math.asin(Math.max(-1, Math.min(1, -R(2,0)))) * 180/Math.PI;
+  const roll = Math.atan2(R(1,0), R(0,0)) * 180/Math.PI;
+  return { yaw, pitch, roll };
+}
+function bs(cats, name){ const c = cats.find(c => c.categoryName === name); return c ? c.score : 0; }
+
+function brightness(v, lm){
+  const W = 192, H = Math.round(W * v.videoHeight / v.videoWidth);
+  off.width = W; off.height = H; offx.drawImage(v, 0, 0, W, H);
+  let x0=1,x1=0,y0=1,y1=0; for (const p of lm){ x0=Math.min(x0,p.x); x1=Math.max(x1,p.x); y0=Math.min(y0,p.y); y1=Math.max(y1,p.y); }
+  const X0=Math.max(0,Math.floor(x0*W)), X1=Math.min(W,Math.ceil(x1*W)), Y0=Math.max(0,Math.floor(y0*H)), Y1=Math.min(H,Math.ceil(y1*H));
+  if (X1-X0 < 4 || Y1-Y0 < 4) return { mean:0, lr:1 };
+  const d = offx.getImageData(X0, Y0, X1-X0, Y1-Y0).data; const w = X1-X0, mid = w/2;
+  let s=0,n=0,sl=0,nl=0,sr=0,nr=0;
+  for (let i=0;i<d.length;i+=4){ const L = .299*d[i]+.587*d[i+1]+.114*d[i+2]; s+=L; n++; const x=(i/4)%w; if (x<mid){sl+=L;nl++;} else {sr+=L;nr++;} }
+  const a = sl/nl, b = sr/nr; return { mean: s/n, lr: Math.abs(a-b)/Math.max(a,b,1) };
+}
+
+function processFrame(v, ts){
+  const r = landmarker.detectForVideo(v, ts);
+  const faces = r.faceLandmarks || [];
+  let msg = null;
+  if (faces.length === 0) msg = "把臉放進框裡";
+  else if (faces.length > 1) msg = "請確定畫面裡只有你";
+  let lm, pose, cats, br;
+  if (!msg){
+    lm = faces[0];
+    const wFace = Math.abs(lm[454].x - lm[234].x);
+    if (wFace < 0.35) msg = "靠近一點";
+    else if (wFace > 0.60) msg = "遠一點";
+  }
+  if (!msg){
+    br = brightness(v, lm);
+    if (br.mean < 90) msg = "到光線充足的地方";
+    else if (br.mean > 200) msg = "太亮了，避開直射光";
+    else if (br.lr > 0.25) msg = "一邊臉太暗，請面向光源";
+  }
+  if (!msg){
+    pose = r.facialTransformationMatrixes?.[0] ? poseFromMatrix(r.facialTransformationMatrixes[0].data) : { yaw:0, pitch:0, roll:0 };
+    const k = TESTMODE ? 2 : 1;
+    if (Math.abs(pose.yaw) > 8*k) msg = "請正對鏡頭";
+    else if (Math.abs(pose.pitch) > 8*k) msg = "不要抬頭或低頭，手機拿到眼睛高度";
+    else if (Math.abs(pose.roll) > 5*k) msg = "頭不要歪";
+  }
+  let skipSilently = false;
+  if (!msg){
+    cats = r.faceBlendshapes?.[0]?.categories || [];
+    const smile = Math.max(bs(cats,"mouthSmileLeft"), bs(cats,"mouthSmileRight"));
+    const frown = Math.max(bs(cats,"browDownLeft"), bs(cats,"browDownRight"));
+    const jaw = bs(cats,"jawOpen");
+    if (!TESTMODE && (smile > .3 || frown > .3 || jaw > .3)) msg = "放鬆表情，不用笑";
+    else if (Math.max(bs(cats,"eyeBlinkLeft"), bs(cats,"eyeBlinkRight")) > .4) skipSilently = true;
+  }
+  const ok = !msg && !skipSilently;
+  $("#oval").setAttribute("stroke", ok ? "#34C759" : "rgba(255,255,255,.55)");
+  $("#oval").setAttribute("stroke-dasharray", ok ? "0" : "8 6");
+  if (msg) $("#hint").textContent = msg;
+  else if (ok) $("#hint").textContent = "很好，保持不動";
+  if (DEBUG && pose) $("#hint").textContent += ` (y${pose.yaw.toFixed(0)} p${pose.pitch.toFixed(0)} r${pose.roll.toFixed(0)} L${br?.mean.toFixed(0)})`;
+  if (!ok) return;
+
+  const W = v.videoWidth, H = v.videoHeight;
+  const P = lm.map(p => ({ x: p.x*W, y: p.y*H, z: p.z*W }));
+  S.frames.push({ P, pose, light: br.mean });
+  const score = Math.abs(pose.yaw) + Math.abs(pose.pitch) + Math.abs(pose.roll);
+  if (score < S.bestScore){
+    S.bestScore = score; S.bestW = W; S.bestH = H;
+    const c = document.createElement("canvas"); c.width = W; c.height = H; c.getContext("2d").drawImage(v, 0, 0, W, H);
+    S.best = { url: c.toDataURL("image/jpeg", .88), P };
+  }
+  const n = S.frames.length;
+  $("#count").textContent = n; $("#bar").style.width = (n/NEED*100).toFixed(1) + "%";
+  if (n >= NEED){
+    stopCam();
+    if (navigator.vibrate) navigator.vibrate(30);
+    $("#hint").textContent = "掃描完成";
+    setTimeout(openHairline, 350);
+  }
+}
+
+// ---------- 髮際線 ----------
+function openHairline(){
+  const img = $("#bestImg"); img.src = S.best.url;
+  show("hair");
+  img.onload = () => {
+    const P = S.best.P, scale = img.clientHeight / S.bestH;
+    // 預設位置：眉心往上，約一個中停的長度
+    const guess = P[9].y - (P[2].y - P[9].y) * 0.95;
+    setHair(Math.max(8, guess * scale));
+  };
+}
+function setHair(px){ const h = $("#hairwrap").clientHeight; px = Math.max(4, Math.min(h-4, px)); $("#hairline").style.top = px + "px"; $("#hairline").dataset.px = px; }
+(() => {
+  const wrap = $("#hairwrap"); let drag = false;
+  const at = e => { const r = wrap.getBoundingClientRect(); const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top; setHair(y); };
+  wrap.addEventListener("pointerdown", e => { drag = true; wrap.setPointerCapture(e.pointerId); at(e); });
+  wrap.addEventListener("pointermove", e => { if (drag) at(e); });
+  wrap.addEventListener("pointerup", () => drag = false);
+})();
+$("#hairOk").onclick = () => { const img = $("#bestImg"); S.hairY = parseFloat($("#hairline").dataset.px) / img.clientHeight * S.bestH; finish(); };
+$("#hairSkip").onclick = () => { S.hairY = null; finish(); };
+
+// ---------- 數學 ----------
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+function align(P){
+  const L = P[468] && P[473] ? [P[468], P[473]] : [P[33], P[263]];
+  const ang = Math.atan2(L[1].y - L[0].y, L[1].x - L[0].x);
+  const c = Math.cos(-ang), s = Math.sin(-ang), ox = (L[0].x+L[1].x)/2, oy = (L[0].y+L[1].y)/2;
+  const rot = p => ({ x: ox + (p.x-ox)*c - (p.y-oy)*s, y: oy + (p.x-ox)*s + (p.y-oy)*c, z: p.z });
+  return { A: P.map(rot), rot };
+}
+function angleAt(a, b, c){
+  const v1 = {x:a.x-b.x, y:a.y-b.y}, v2 = {x:c.x-b.x, y:c.y-b.y};
+  const cos = (v1.x*v2.x + v1.y*v2.y) / (Math.hypot(v1.x,v1.y) * Math.hypot(v2.x,v2.y));
+  return Math.acos(Math.max(-1, Math.min(1, cos))) * 180/Math.PI;
+}
+function distToLine(p, a, b){ const dx=b.x-a.x, dy=b.y-a.y; return Math.abs(dy*p.x - dx*p.y + b.x*a.y - b.y*a.x) / Math.hypot(dx,dy); }
+
+// hairRatio：髮際到眉心的距離 ÷ 臉寬（只在最佳畫面上量一次，套到每一張）
+function features(P, hairRatio){
+  const { A } = align(P);
+  const f = {};
+  const width = dist(A[234], A[454]);
+  const yGl = A[9].y, ySub = A[2].y, yChin = A[152].y;
+  const M = ySub - yGl, Lw = yChin - ySub;
+  if (hairRatio != null){
+    const U = hairRatio * width; const mean = (U + M + Lw) / 3;
+    f.santing_U = U/mean; f.santing_M = M/mean; f.santing_L = Lw/mean;
+    f.santing_dev = Math.max(Math.abs(f.santing_U-1), Math.abs(f.santing_M-1), Math.abs(f.santing_L-1));
+    f.face_aspect = (yChin - (yGl - U)) / width;
+  } else {
+    f.face_aspect = (yChin - A[10].y) * 1.12 / width;
+    f.santing_L_ml = Lw / ((M + Lw)/2); // 只有中下停可比
+  }
+  f.fore_jaw = dist(A[54], A[284]) / dist(A[172], A[397]);
+  f.jaw_angle = (angleAt(A[234], A[172], A[152]) + angleAt(A[454], A[397], A[152])) / 2;
+  const eyeR = dist(A[33], A[133]), eyeL = dist(A[263], A[362]), eye = (eyeR + eyeL)/2;
+  // 眉尾超出外眼角多少（以眼長為單位）：右側往 x 小的方向、左側往 x 大的方向
+  f.brow_eye = (((A[33].x - A[70].x) / eyeR) + ((A[300].x - A[263].x) / eyeL)) / 2;
+  const tail = (head, end) => Math.atan2(head.y - end.y, Math.abs(end.x - head.x)) * 180/Math.PI;
+  f.brow_tail = (tail(A[107], A[70]) + tail(A[336], A[300])) / 2;
+  f.yintang = dist(A[107], A[336]) / eye;
+  f.eye_lw = (eyeR / Math.max(1, dist(A[159], A[145])) + eyeL / Math.max(1, dist(A[386], A[374]))) / 2;
+  f.nose_dev = Math.max(...[6,197,195,5].map(i => distToLine(A[i], A[168], A[1]))) / width;
+  const mw = dist(A[61], A[291]);
+  f.mouth_ipd = mw / dist(A[468] || A[33], A[473] || A[263]);
+  const lipMid = (A[13].y + A[14].y)/2, corners = (A[61].y + A[291].y)/2;
+  f.mouth_corner = (lipMid - corners) / mw;
+  f.lip_thick = (dist(A[0], A[13]) + dist(A[14], A[17])) / mw;
+  f.renzhong = dist(A[2], A[0]) / Lw;
+  f.nose_prom = ((A[50].z + A[280].z)/2 - A[1].z) / width;
+  f.cheek_prom = ((A[234].z + A[454].z)/2 - (A[50].z + A[280].z)/2) / width;
+  return f;
+}
+const median = a => { const s = [...a].sort((x,y)=>x-y), n = s.length; return n%2 ? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2; };
+const quant = (a,q) => { const s = [...a].sort((x,y)=>x-y); const i = (s.length-1)*q, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi]-s[lo])*(i-lo); };
+
+function summarize(){
+  let hairRatio = null;
+  if (S.hairY != null){
+    const { A, rot } = align(S.best.P);
+    const hp = rot({ x: S.best.P[10].x, y: S.hairY, z: 0 });
+    hairRatio = (A[9].y - hp.y) / dist(A[234], A[454]);
+    if (!(hairRatio > 0.15 && hairRatio < 1.2)) hairRatio = null; // 拉得太離譜就當沒拉
+  }
+  const all = S.frames.map(fr => features(fr.P, hairRatio));
+  const keys = Object.keys(all[0]);
+  const out = {};
+  for (const k of keys){
+    const vals = all.map(f => f[k]).filter(Number.isFinite);
+    const med = median(vals), iqr = quant(vals,.75) - quant(vals,.25);
+    const isDeg = k === "jaw_angle" || k === "brow_tail";
+    const unstable = isDeg ? iqr > 3 : Math.abs(iqr / (Math.abs(med) || 1e-6)) > RULES.thresholds.unstable_spread.value && Math.abs(med) > 0.02;
+    out[k] = { v: med, iqr, unstable };
+  }
+  return { F: out, hairRatio };
+}
+
+// ---------- 規則比對 ----------
+const TH = k => RULES.thresholds[k].value;
+function test(F, c){
+  const x = F[c.feature]?.v; if (!Number.isFinite(x)) return { pass:null };
+  const t = c.th ? TH(c.th) : c.value;
+  const pass = c.op === ">=" ? x >= t : c.op === "<=" ? x <= t : c.op === ">" ? x > t : x < t;
+  const isDeg = c.feature === "brow_tail" || c.feature === "jaw_angle";
+  const edge = isDeg ? Math.abs(x - t) <= 1 : Math.abs(x - t) <= Math.abs(t) * 0.03;
+  return { pass, x, t, edge, unstable: F[c.feature].unstable };
+}
+function judgeOfficials(F){
+  return RULES.officials.map(o => {
+    if (!o.conditions.length) return { o, status:"不判", why:o.unjudged, rows:[] };
+    if (o.blockedBy === "brow_tattoo" && S.answers.browTattoo) return { o, status:"不判", why:"你勾了紋眉或修眉，眉形是選出來的，不是天生的（2-4、2-14）", rows:[] };
+    if (o.blockedBy === "nose_surgery" && S.answers.noseSurgery) return { o, status:"不判", why:"你勾了鼻子動過，原典假設臉是天生的（第五部）", rows:[] };
+    const rows = o.conditions.map(c => ({ c, ...test(F, c) }));
+    if (rows.some(r => r.pass === null)) return { o, status:"不判", why:"量測資料不足", rows };
+    const status = rows.every(r => r.pass) ? "成" : "不成";
+    return { o, status, rows };
+  });
+}
+function matchRules(F, hasHair){
+  return RULES.rules.filter(r => {
+    if (r.needHairline && !hasHair) return false;
+    const conds = r.when.all || [r.when];
+    return conds.every(c => test(F, c).pass === true);
+  });
+}
+function wuxing(F, hasHair){
+  const cl = x => Math.max(0, Math.min(1, x));
+  const A = F.face_aspect.v, R = F.fore_jaw.v, J = F.jaw_angle.v;
+  const Lh = hasHair ? F.santing_L.v : (F.santing_L_ml ? F.santing_L_ml.v : 1);
+  const s = {
+    "木": cl((A - 1.30) / 0.20),
+    "金": (1 - cl(Math.abs(R - 1.0) / 0.12)) * cl((130 - J) / 12),
+    "火": cl((0.95 - R) / 0.15),
+    "水": cl((1.30 - A) / 0.15) * cl((J - 124) / 12),
+    "土": cl((1.32 - A) / 0.15) * cl((Lh - 1.0) / 0.12)
+  };
+  const order = Object.entries(s).sort((a,b) => b[1]-a[1]);
+  const host = order[0][0], hs = order[0][1];
+  const guest = (order[1][1] >= 0.25 && order[1][1] >= hs * 0.6) ? order[1][0] : null;
+  const W = RULES.wuxing; let rel = null;
+  if (guest){
+    if (W.sheng[guest] === host) rel = { kind:"客生主", lines:[W.keRule.sheng] };
+    else if (W.ke[guest] === host) rel = { kind:"客剋主", lines:[W.keRule.quanbian_guestKillsHost, W.keRule.bingjian_guestKillsHost] };
+    else if (W.ke[host] === guest) rel = { kind:"主剋客", lines:[W.keRule.quanbian_hostKillsGuest, W.keRule.bingjian_hostKillsGuest] };
+    else if (W.sheng[host] === guest) rel = { kind:"主生客", lines:["兩本書都沒有這一組的例子，古書在這裡沒有說法。"] };
+  }
+  return { scores:s, host, guest, weak: hs < 0.2, rel };
+}
+
+// ---------- 報告 ----------
+const fmt = (k, v) => {
+  if (!Number.isFinite(v)) return "—";
+  const u = RULES.features[k]?.unit;
+  if (u === "%") return (v*100).toFixed(1) + "%";
+  if (u === "度") return v.toFixed(1) + "°";
+  return v.toFixed(2);
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function finish(){
+  loading(true, "對照古書");
+  setTimeout(() => {
+    const { F, hairRatio } = summarize();
+    const hasHair = hairRatio != null;
+    const result = {
+      when: new Date().toISOString(), hasHair, answers: S.answers, frames: S.frames.length,
+      light: median(S.frames.map(f => f.light)),
+      F, officials: judgeOfficials(F), rules: matchRules(F, hasHair), wx: wuxing(F, hasHair)
+    };
+    try { localStorage.setItem("guaxiang-last", JSON.stringify({ result: slim(result), img: S.best.url, P: S.best.P, W:S.bestW, H:S.bestH, hairY:S.hairY })); } catch(e){}
+    render(result);
+    loading(false);
+  }, 30);
+}
+const slim = r => ({ ...r, officials: r.officials.map(x => ({ id:x.o.id, status:x.status, why:x.why, rows:x.rows.map(y => ({ f:y.c.feature, x:y.x, t:y.t, pass:y.pass })) })), rules: r.rules.map(x => x.id) });
+
+function render(R){
+  const el = $("#report");
+  const wx = R.wx, W = RULES.wuxing;
+  const cnt = s => R.officials.filter(x => x.status === s).length;
+  const tag = s => s === "成" ? `<span class="tag t-ok">成</span>` : s === "不成" ? `<span class="tag t-bad">不成</span>` : `<span class="tag t-na">不判</span>`;
+  const unstableList = Object.entries(R.F).filter(([k,o]) => o.unstable && RULES.features[k]).map(([k]) => RULES.features[k].name);
+
+  el.innerHTML = `
+  <h1>你的面相</h1>
+  <p class="lead">${new Date(R.when).toLocaleDateString("zh-TW")}・${R.frames} 張合格畫面的中位數</p>
+
+  <h2>這次看不到的</h2>
+  <div class="card">
+    <div class="block small">算命先生當面看你，看的不只是臉的形狀。這些照片拍不到，所以這份報告不假裝看到了。</div>
+    ${RULES.cannotSee.map(c => `<div class="row"><span>${c.name}</span><span class="v small" style="max-width:68%;text-align:right">${c.why}</span></div>`).join("")}
+    ${!R.hasHair ? `<div class="row"><span>三停</span><span class="v small">沒有髮際線，上停量不到</span></div>` : ""}
+    ${S.answers.browTattoo ? `<div class="row"><span>眉</span><span class="v small">你勾了紋眉／修眉</span></div>` : ""}
+    ${S.answers.noseSurgery ? `<div class="row"><span>鼻</span><span class="v small">你勾了鼻子動過</span></div>` : ""}
+    ${unstableList.length ? `<div class="block small warn">這幾項在 30 張畫面之間變動大，結果只當參考：${unstableList.join("、")}</div>` : ""}
+  </div>
+
+  <h2>命格卡</h2>
+  <div class="card">
+    <div class="mingge">
+      <div class="kind">臉形推估・五行形</div>
+      <div class="big">${wx.host}形人</div>
+      <div class="kind">${wx.guest ? `兼帶${wx.guest}形` : "沒有明顯的兼形"}${wx.weak ? "・特徵不明顯，接近中間型" : ""}</div>
+      <p class="quote" style="margin-top:14px">${W.types[wx.host].yuanwen}</p>
+      <p class="src">${W.source}</p>
+    </div>
+    ${wx.rel ? `<div class="block"><b>${wx.host}形帶${wx.guest}：${wx.rel.kind}</b>${wx.rel.lines.map(l => `<div class="small" style="margin-top:6px">${esc(l)}</div>`).join("")}${wx.rel.kind.includes("剋") ? `<div class="small" style="margin-top:6px">兩本古書對相剋的看法剛好相反（5-E）。</div>` : ""}</div>` : ""}
+    <div class="block small">古書說「${W.summary}」，又說「${W.notFault}」：每一形本來的樣子，在那一形身上不算缺點。<br>這是只看臉形的推估。五行形本來是全身相，要看身形、膚色才完整。</div>
+  </div>
+
+  <h2>面相標註圖</h2>
+  <div class="card annot">
+    <div class="seg"><button class="on" data-m="photo">照片</button><button data-m="line">只看線條</button></div>
+    <canvas id="annot"></canvas>
+  </div>
+
+  <h2>五官</h2>
+  <div class="card">
+    <div class="block">成 ${cnt("成")}・不成 ${cnt("不成")}・不判 ${cnt("不判")}
+      <div class="small" style="margin-top:4px">古書說「一官成，十年之貴顯」。「不判」的官不能當成「成」來算，「十年」也只是概數。</div></div>
+  </div>
+  ${R.officials.map(x => `
+  <div class="card">
+    <details>
+      <summary><span>${tag(x.status)}${x.o.name}（${x.o.organ}）</span></summary>
+      ${x.why ? `<div class="block small">${esc(x.why)}</div>` : ""}
+      ${x.rows.map(r => `<div class="row"><span>${r.c.label}${r.unstable ? ' <span class="tag t-edge">不穩</span>' : ""}${r.edge ? ' <span class="tag t-edge">邊緣</span>' : ""}</span><span class="v">${fmt(r.c.feature, r.x)} ${r.c.op} ${fmt(r.c.feature, r.t)} ${r.pass ? "✓" : "✗"}</span></div>`).join("")}
+      ${x.o.notMeasured ? `<div class="block small">量不到：${x.o.notMeasured.join("、")}${x.status === "成" ? "。所以這裡的「成」只代表量得到的幾條合格。" : ""}</div>` : ""}
+      <div class="block"><p class="quote">${esc(x.o.yuanwen)}</p><p>${esc(x.o.baihua)}</p><p class="src">${esc(x.o.source)}・文獻 ${esc(x.o.lit)}</p></div>
+    </details>
+  </div>`).join("")}
+
+  ${R.hasHair ? `
+  <h2>三停</h2>
+  <div class="card">
+    <div class="row">上停（初年）<span class="v">${fmt("santing_U", R.F.santing_U.v)}</span></div>
+    <div class="row">中停（中年）<span class="v">${fmt("santing_M", R.F.santing_M.v)}</span></div>
+    <div class="row">下停（晚年）<span class="v">${fmt("santing_L", R.F.santing_L.v)}</span></div>
+    ${(() => { const r = R.rules.find(r => r.part === "三停"); if (!r) return "";
+      const longest = [["上停",R.F.santing_U.v],["中停",R.F.santing_M.v],["下停",R.F.santing_L.v]].sort((a,b)=>b[1]-a[1])[0][0];
+      return `<div class="block">${r.id === "santing-long" ? `<b>${longest}最長</b><br>` : "<b>三停大致平等</b><br>"}<p class="quote">${esc(r.yuanwen)}</p><p>${esc(r.baihua)}</p><p class="src">${esc(r.source)}</p></div>`; })()}
+  </div>` : ""}
+
+  ${R.rules.filter(r => r.part !== "三停").length ? `<h2>其他古書條文</h2>` : ""}
+  ${R.rules.filter(r => r.part !== "三停").map(r => `
+  <div class="card"><div class="block"><b>${esc(r.part)}</b>${r.experimental ? ' <span class="tag t-edge">實驗</span>' : ""}<p class="quote">${esc(r.yuanwen)}</p><p>${esc(r.baihua)}</p><p class="src">${esc(r.source)}・文獻 ${esc(r.lit)}</p></div></div>`).join("")}
+
+  <h2>數學</h2>
+  <div class="card"><div class="block">
+    <p class="small" style="margin-bottom:8px">每一項都是比例，不受臉離鏡頭遠近影響；數字是 ${R.frames} 張畫面的中位數，「波動」是四分位距。門檻是暫定值。</p>
+    <table class="math"><tr><th>項目</th><th>數值</th><th>波動</th><th>算法</th></tr>
+    ${Object.entries(R.F).filter(([k]) => RULES.features[k]).map(([k,o]) => `<tr><td>${RULES.features[k].name}${o.unstable ? ' <span class="tag t-edge">不穩</span>' : ""}</td><td class="n">${fmt(k,o.v)}</td><td class="n">${fmt(k,o.iqr)}</td><td class="small">${esc(RULES.features[k].formula)}</td></tr>`).join("")}
+    <tr><td>五行計分</td><td class="n" colspan="2">${Object.entries(R.wx.scores).map(([k,v]) => `${k} ${v.toFixed(2)}`).join("<br>")}</td><td class="small">${esc(RULES.wuxing.note)}</td></tr>
+    </table>
+    <p class="small" style="margin-top:8px">平均光線亮度 ${R.light.toFixed(0)}／255</p>
+  </div></div>
+
+  <button class="btn" id="again">再掃一次</button>
+  <button class="btn ghost" id="exportJson">匯出數字（不含照片）</button>
+  <button class="btn ghost" id="clearAll">清除我的資料</button>
+  <p class="small" style="margin:6px">古書的說法沒有經過現代方法檢驗。這份報告是傳統文化解讀，不能用來判斷健康、替你或別人做重大決定。</p>
+  `;
+  show("report");
+  drawAnnot("photo");
+  el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { el.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x===b)); drawAnnot(b.dataset.m); });
+  $("#again").onclick = () => show("consent");
+  $("#exportJson").onclick = () => {
+    const blob = new Blob([JSON.stringify({ version: RULES.version, ...slim(R) }, null, 2)], { type:"application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "guaxiang-" + Date.now() + ".json"; a.click();
+  };
+  $("#clearAll").onclick = () => { localStorage.removeItem("guaxiang-last"); S.frames = []; S.best = null; $("#report").innerHTML = ""; show("intro"); };
+}
+
+function drawAnnot(mode){
+  const cv = $("#annot"), P = S.best.P, W = S.bestW, H = S.bestH;
+  const img = new Image();
+  img.onload = () => {
+    cv.width = W; cv.height = H; const g = cv.getContext("2d");
+    g.save(); g.translate(W, 0); g.scale(-1, 1); // 跟自拍一樣左右相反
+    if (mode === "photo") g.drawImage(img, 0, 0, W, H);
+    else { g.fillStyle = getComputedStyle(document.body).getPropertyValue("--card") || "#fff"; g.fillRect(0,0,W,H); }
+    const lw = Math.max(2, W/320);
+    const line = (y, color, label) => {
+      g.strokeStyle = color; g.lineWidth = lw; g.setLineDash([lw*4, lw*3]);
+      const x0 = P[234].x - (P[454].x-P[234].x)*0.15, x1 = P[454].x + (P[454].x-P[234].x)*0.15;
+      g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke(); g.setLineDash([]);
+      g.save(); g.translate(x1, y); g.scale(-1,1); g.fillStyle = color; g.font = `600 ${W/26}px -apple-system,sans-serif`; g.fillText(label, 4, -6); g.restore();
+    };
+    if (S.hairY != null) line(S.hairY, "#FF9500", "髮際");
+    line(P[9].y, "#FF9500", "上停｜中停"); line(P[2].y, "#FF9500", "中停｜下停"); line(P[152].y, "#FF9500", "地閣");
+    const ring = (idx, color) => { g.strokeStyle = color; g.lineWidth = lw*1.3; g.beginPath(); idx.forEach((i,k) => k ? g.lineTo(P[i].x, P[i].y) : g.moveTo(P[i].x, P[i].y)); g.closePath(); g.stroke(); };
+    ring([70,63,105,66,107,55,65,52,53,46], "#AF52DE"); ring([300,293,334,296,336,285,295,282,283,276], "#AF52DE");
+    ring([33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7], "#007AFF");
+    ring([263,466,388,387,386,385,384,398,362,382,381,380,374,373,390,249], "#007AFF");
+    g.strokeStyle = "#34C759"; g.lineWidth = lw*1.3; g.beginPath(); [168,6,197,195,5,4,1].forEach((i,k) => k ? g.lineTo(P[i].x, P[i].y) : g.moveTo(P[i].x, P[i].y)); g.stroke();
+    ring([129,98,97,2,326,327,358,279,360,363,281,5,51,134,131], "#34C759");
+    ring([61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146], "#FF2D55");
+    g.fillStyle = "#FF9500"; [107,336].forEach(i => { g.beginPath(); g.arc(P[i].x, P[i].y, lw*2.2, 0, 7); g.fill(); });
+    g.restore();
+  };
+  img.src = S.best.url;
+}
+
+// 重開時恢復上一次的結果
+(() => {
+  try {
+    const s = JSON.parse(localStorage.getItem("guaxiang-last") || "null");
+    if (s && s.img){
+      const btn = document.createElement("button"); btn.className = "btn ghost"; btn.textContent = "看上一次的結果";
+      btn.onclick = async () => { await loadRulesOnly(); S.best = { url: s.img, P: s.P }; S.bestW = s.W; S.bestH = s.H; S.hairY = s.hairY; renderSaved(s.result); };
+      $("#intro").appendChild(btn);
+    }
+  } catch(e){}
+})();
+async function loadRulesOnly(){ if (!RULES) RULES = await (await fetch("rules.json", {cache:"no-cache"})).json(); }
+function renderSaved(r){
+  const byId = Object.fromEntries(RULES.officials.map(o => [o.id, o]));
+  const R = { ...r,
+    officials: r.officials.map(x => ({ o: byId[x.id], status: x.status, why: x.why,
+      rows: x.rows.map(y => ({ c: byId[x.id].conditions.find(c => c.feature === y.f), x: y.x, t: y.t, pass: y.pass, edge:false, unstable: r.F[y.f]?.unstable })) })),
+    rules: RULES.rules.filter(x => r.rules.includes(x.id)) };
+  S.answers = r.answers || {};
+  render(R);
+}
+window.__guaxiang = { S, features, summarize, judgeOfficials, wuxing, get RULES(){ return RULES; } };
+</script>
+</body>
+</html>
