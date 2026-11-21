@@ -68,6 +68,10 @@ jobs:
         if: ${{ failure() }}
         run: grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -100 || true
 
+      # 警告不擋編譯，但列出來看（只列我們自己的檔案）
+      - name: 編譯警告整理
+        run: grep -E "/ios/Guaxiang.*warning:" "$RUNNER_TEMP/build.log" | sed -E 's#^.*/ios/##' | sort -u | head -80 || true
+
       - name: 跑單元測試
         run: |
           set -o pipefail
@@ -76,4 +80,4 @@ jobs:
             -scheme Guaxiang \
             -destination "${SIMULATOR}" \
             -derivedDataPath DerivedData 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "error:|failed|passed|Executed|TEST" || true
-          grep -q "TEST SUCCEEDED" "$RUNNER_TEMP/test.log"
+          grep -q "TEST EXECUTE SUCCEEDED" "$RUNNER_TEMP/test.log"

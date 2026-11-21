@@ -1,0 +1,131 @@
+name: TestFlight
+
+# 把瓜相簽章、封裝、送到 TestFlight。照豆鍵跑通的那一份改的，還沒在這個 repo 跑過。
+# 只有兩種情況會跑：推 tf-* 的 tag（例如 tf-1），或在 Actions 頁面手動按。日常 commit 不會觸發。
+# 跑之前多米要先做：
+#   1. 在 App Store Connect 新增 App，bundle ID 選 org.domyweb.guaxiang
+#   2. 在這個 repo 的 Settings → Secrets 貼四個值：ASC_KEY_ID、ASC_ISSUER_ID、ASC_PRIVATE_KEY、APPLE_TEAM_ID
+on:
+  push:
+    tags:
+      - "tf-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XCODEGEN_VERSION: "2.46.0"
+  XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+  BUNDLE_ID: org.domyweb.guaxiang
+
+jobs:
+  build:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ios
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝 XcodeGen（釘版本、驗 SHA-256）
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+
+      - name: 產生 Xcode 專案（build 號 = 這次 run 的編號）
+        run: |
+          xcodebuild -version
+          sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: \"${GITHUB_RUN_NUMBER}\"/" project.yml
+          grep CURRENT_PROJECT_VERSION project.yml
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate --spec project.yml
+
+      # 從網頁貼進 secret 的 .p8 常常變成一行，xcodebuild 會回 invalidPEMDocument，所以先重排成每行 64 字
+      - name: 放置 App Store Connect 金鑰
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/private_keys"
+          python3 - <<'PY'
+          import os, re, textwrap
+          raw = os.environ["ASC_PRIVATE_KEY"]
+          body = re.sub(r"-----(BEGIN|END) PRIVATE KEY-----|\s", "", raw)
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(textwrap.wrap(body, 64)) + "\n-----END PRIVATE KEY-----\n"
+          path = os.path.expanduser(f"~/private_keys/AuthKey_{os.environ['ASC_KEY_ID']}.p8")
+          open(path, "w").write(pem)
+          print("金鑰檔行數:", len(pem.strip().splitlines()))
+          PY
+          sed "s/__TEAM_ID__/${APPLE_TEAM_ID}/" ExportOptions.plist > "$HOME/ExportOptions.plist"
+
+      - name: 金鑰自檢（直接問 Apple）
+        run: |
+          python3 -m venv "$HOME/venv" && "$HOME/venv/bin/pip" install -q pyjwt cryptography requests
+          "$HOME/venv/bin/python" - <<'PY'
+          import os, time, jwt, requests
+          key = open(os.path.expanduser(f"~/private_keys/AuthKey_{os.environ['ASC_KEY_ID']}.p8")).read()
+          token = jwt.encode({"iss": os.environ["ASC_ISSUER_ID"], "iat": int(time.time()), "exp": int(time.time())+600, "aud": "appstoreconnect-v1"},
+                             key, algorithm="ES256", headers={"kid": os.environ["ASC_KEY_ID"], "typ": "JWT"})
+          r = requests.get("https://api.appstoreconnect.apple.com/v1/apps?fields[apps]=bundleId,name&limit=200", headers={"Authorization": f"Bearer {token}"})
+          print("Apple 回應:", r.status_code)
+          if r.status_code != 200:
+              print(r.text[:800]); raise SystemExit("金鑰被 Apple 拒絕：請檢查 Key ID / Issuer ID / .p8 內容，以及金鑰是 Team Key 且角色為 Admin")
+          bundle = os.environ["BUNDLE_ID"]
+          if not any(a["attributes"]["bundleId"] == bundle for a in r.json()["data"]):
+              raise SystemExit(f"App Store Connect 還沒有 bundle ID 為 {bundle} 的 app 紀錄，請先新增 App")
+          PY
+
+      - name: 封存（自動簽章）
+        run: |
+          xcodebuild archive \
+            -project Guaxiang.xcodeproj \
+            -scheme Guaxiang \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$HOME/build/Guaxiang.xcarchive" \
+            DEVELOPMENT_TEAM="${APPLE_TEAM_ID}" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "${ASC_KEY_ID}" \
+            -authenticationKeyIssuerID "${ASC_ISSUER_ID}"
+
+      - name: 上傳 TestFlight
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$HOME/build/Guaxiang.xcarchive" \
+            -exportOptionsPlist "$HOME/ExportOptions.plist" \
+            -exportPath "$HOME/build/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "${ASC_KEY_ID}" \
+            -authenticationKeyIssuerID "${ASC_ISSUER_ID}"
+
+      - name: 清掉這次 runner 產的開發憑證（runner 用完即丟，憑證留著只會撞上限）
+        if: always()
+        run: |
+          "$HOME/venv/bin/python" - <<'PY'
+          import os, time, jwt, requests
+          key = open(os.path.expanduser(f"~/private_keys/AuthKey_{os.environ['ASC_KEY_ID']}.p8")).read()
+          tok = jwt.encode({"iss": os.environ["ASC_ISSUER_ID"], "iat": int(time.time()), "exp": int(time.time())+600, "aud": "appstoreconnect-v1"},
+                           key, algorithm="ES256", headers={"kid": os.environ["ASC_KEY_ID"], "typ": "JWT"})
+          H = {"Authorization": f"Bearer {tok}"}
+          c = requests.get("https://api.appstoreconnect.apple.com/v1/certificates?fields[certificates]=certificateType,displayName&limit=50", headers=H).json()
+          for x in c.get("data", []):
+              a = x["attributes"]
+              if a["certificateType"] in ("DEVELOPMENT", "IOS_DEVELOPMENT") and a.get("displayName") == "Created via API":
+                  r = requests.delete(f"https://api.appstoreconnect.apple.com/v1/certificates/{x['id']}", headers=H)
+                  print("清掉開發憑證", x["id"], r.status_code)
+          PY
+
+      - name: 清掉金鑰
+        if: always()
+        run: rm -rf "$HOME/private_keys"
