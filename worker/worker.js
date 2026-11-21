@@ -14,7 +14,10 @@ export default {
   async fetch(req, env) {
     const origin = req.headers.get("origin") || "";
     const allowed = (env.ALLOWED_ORIGINS || "https://domyweb666.github.io").split(",").map(s => s.trim());
-    const ok = allowed.includes(origin) || (env.ALLOW_LOCALHOST === "1" && /^http:\/\/localhost(:\d+)?$/.test(origin));
+    // iOS app 不是瀏覽器，不會帶 origin；改認 app 自己帶的標頭。
+    // 這個標頭誰都能假造，擋不了有心人，所以上架前一定要加每人每天的次數限制（HANDOFF 第八節）。
+    const fromApp = !origin && env.ALLOW_APP === "1" && /^ios\/[\d.]+$/.test(req.headers.get("x-guaxiang-client") || "");
+    const ok = fromApp || allowed.includes(origin) || (env.ALLOW_LOCALHOST === "1" && /^http:\/\/localhost(:\d+)?$/.test(origin));
     if (req.method === "OPTIONS") return new Response(null, { status: ok ? 204 : 403, headers: ok ? cors(origin) : {} });
     if (req.method !== "POST") return json({ error: "只接受 POST" }, 405, origin);
     if (!ok) return json({ error: "來源不允許" }, 403, "");

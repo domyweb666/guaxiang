@@ -1,0 +1,79 @@
+name: iOS CI
+
+# 沒有 Mac 也能確認編得過、測試會過。不需要任何 secret、不簽章、不上傳 TestFlight。
+# 只在 iOS 程式、規則庫、提示詞或這個檔有改動時跑；手動按 Run workflow 也會跑。
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "ios/**"
+      - "rules.json"
+      - "prompt.js"
+      - ".github/workflows/ios-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  XCODEGEN_VERSION: "2.46.0"
+  # 跟米說的 CI 同一版、同一個雜湊（2026-10-31 從官方 release 下載後算出）
+  XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+  SIMULATOR: "platform=iOS Simulator,name=iPhone 17"
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 提示詞跟 prompt.js 一字不差
+        run: node tools/check-prompt.mjs
+
+      - name: 安裝 XcodeGen（釘版本、驗 SHA-256）
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          test -x "$RUNNER_TEMP/xcodegen/bin/xcodegen"
+
+      - name: 產生 Xcode 專案
+        run: |
+          xcodebuild -version
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate --spec project.yml
+          test -d Guaxiang.xcodeproj
+          # 規則庫和隱私清單要真的被放進 App 的資源裡
+          grep -q "rules.json in Resources" Guaxiang.xcodeproj/project.pbxproj
+          grep -q "PrivacyInfo.xcprivacy in Resources" Guaxiang.xcodeproj/project.pbxproj
+
+      # 模擬器版用本機自簽（ad-hoc，不需要憑證）
+      - name: 編譯模擬器版
+        id: build
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project Guaxiang.xcodeproj \
+            -scheme Guaxiang \
+            -destination "${SIMULATOR}" \
+            -derivedDataPath DerivedData \
+            CODE_SIGN_IDENTITY=- 2>&1 | tee "$RUNNER_TEMP/build.log" | grep -E "error:|warning: unre|BUILD|Compiling|Testing" || true
+          grep -q "TEST BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+
+      - name: 編譯錯誤整理
+        if: ${{ failure() }}
+        run: grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -100 || true
+
+      - name: 跑單元測試
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project Guaxiang.xcodeproj \
+            -scheme Guaxiang \
+            -destination "${SIMULATOR}" \
+            -derivedDataPath DerivedData 2>&1 | tee "$RUNNER_TEMP/test.log" | grep -E "error:|failed|passed|Executed|TEST" || true
+          grep -q "TEST SUCCEEDED" "$RUNNER_TEMP/test.log"

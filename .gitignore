@@ -1,0 +1,5 @@
+# iOS：Xcode 專案和 Info.plist 由 XcodeGen 照 ios/project.yml 產生，不進 repo
+ios/*.xcodeproj/
+ios/Guaxiang/Info.plist
+ios/DerivedData/
+.DS_Store
