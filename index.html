@@ -83,6 +83,21 @@ details summary::-webkit-details-marker{display:none}
 details summary::after{content:"›";color:var(--gray);transform:rotate(90deg);transition:transform .2s}
 details[open] summary::after{transform:rotate(-90deg)}
 .warn{color:var(--accent)}
+/* 問古書 */
+.field{padding:12px 18px}
+.field+.field{border-top:.5px solid var(--sep)}
+.field label{display:block;font-size:13px;color:var(--sub);margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;font:inherit;font-size:17px;border:0;background:var(--fill);color:var(--text);border-radius:12px;padding:10px 12px;-webkit-appearance:none;appearance:none}
+.field textarea{min-height:84px;resize:vertical;line-height:1.5}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 4px 12px}
+.chip{border:0;background:var(--card);color:var(--text);font:inherit;font-size:15px;padding:8px 14px;border-radius:999px;cursor:pointer}
+.qbubble{margin:18px 0 8px auto;max-width:85%;background:var(--accent);color:#fff;border-radius:20px 20px 6px 20px;padding:10px 14px;font-size:16px;line-height:1.5;width:fit-content}
+.answer{font-size:16px;line-height:1.7;white-space:pre-wrap}
+.cite{border:0;background:rgba(255,149,0,.16);color:var(--accent);font:inherit;font-size:12px;font-weight:600;border-radius:6px;padding:1px 6px;margin:0 2px;cursor:pointer;vertical-align:1px}
+.citebox{margin-top:10px;background:var(--fill);border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.6;white-space:pre-wrap}
+.askbar{position:sticky;bottom:0;background:var(--bg);padding:10px 0 calc(10px + env(safe-area-inset-bottom))}
+.askbar textarea{width:100%;font:inherit;font-size:17px;border:0;background:var(--card);color:var(--text);border-radius:20px;padding:12px 14px;min-height:52px;resize:none}
+.askbar .btn{margin:8px 0 0}
 #loading{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9;font-size:17px;color:var(--sub)}
 #loading.on{display:flex}
 .spin{width:32px;height:32px;border:3px solid var(--fill);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite}
@@ -154,12 +169,55 @@ details[open] summary::after{transform:rotate(-90deg)}
 <!-- 5 報告 -->
 <section class="screen" id="report"></section>
 
+
+<!-- 6 問古書 -->
+<section class="screen" id="ask">
+  <button class="chip" id="backReport" style="margin-top:12px">‹ 回到報告</button>
+  <h1>問古書</h1>
+  <p class="lead">先填簡介，再問問題。回答只會根據這次量到的結果和古書條文。</p>
+  <div id="liunianBox"></div>
+  <h2 style="display:flex;justify-content:space-between;align-items:center">簡介<button class="chip" id="editProfile" style="font-size:14px;display:none">修改</button></h2>
+  <div class="card" id="profileForm">
+    <div class="field"><label>年紀（實歲）</label><input id="pAge" type="number" inputmode="numeric" min="18" max="99" placeholder="例如 34"></div>
+    <div class="field"><label>性別（古書的流年分左右、婚姻那一宮用詞不同）</label>
+      <select id="pGender"><option value="">不想說</option><option>男</option><option>女</option></select></div>
+    <div class="field"><label>感情狀態</label>
+      <select id="pRelation"><option value="">不想說</option><option>單身</option><option>交往中</option><option>已婚</option><option>其他</option></select></div>
+    <div class="field"><label>工作類型</label>
+      <select id="pWork"><option value="">不想說</option><option>上班族</option><option>自己創業或接案</option><option>學生</option><option>家管</option><option>退休</option><option>其他</option></select></div>
+    <div class="field"><label>想多說一點（選填，最多 400 字）</label><textarea id="pIntro" maxlength="400" placeholder="例如最近在煩惱什麼、想問哪方面"></textarea>
+      <div class="small" style="margin-top:6px">這段只用來挑出跟你的問題有關的古書條文。回答不會把你自己說的事，講成是從臉上看出來的。</div></div>
+    <div class="field"><button class="btn" id="saveProfile" style="margin:4px 0">存好簡介</button></div>
+  </div>
+  <div class="card" id="profileSummary" style="display:none"><div class="block" id="profileText"></div></div>
+
+  <div class="card" id="aiConsentCard">
+    <label class="chk"><input type="checkbox" id="aiConsent"><span>我同意把簡介、問題和這次量測結果的文字整理，傳給 AI（Anthropic 的 Claude）產生回答<br><span class="small">照片和臉部座標不會傳出去。</span></span></label>
+  </div>
+  <div class="card" id="keyCard" style="display:none">
+    <div class="block small">中繼站還沒架好。開發測試可以先貼上你自己的 Anthropic API 金鑰，只存在這支手機，直接從手機送出。</div>
+    <div class="field"><input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
+    <div class="field"><button class="btn ghost" id="saveKey" style="margin:4px 0">存金鑰</button></div>
+  </div>
+
+  <h2>問題</h2>
+  <div class="chips" id="examples"></div>
+  <div id="chat"></div>
+  <div class="askbar">
+    <textarea id="qInput" maxlength="300" placeholder="想問什麼？例如：我今年運勢怎樣？"></textarea>
+    <button class="btn" id="askBtn">問</button>
+  </div>
+  <button class="btn ghost" id="clearChat" style="font-size:15px;padding:10px">清除問答紀錄</button>
+</section>
+
 <script type="module">
+import { buildRequest } from "./prompt.js";
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.mjs";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm";
 const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const NEED = 30;
+const ASK_ENDPOINT = ""; // 中繼站網址，部署 worker 後填這裡，例如 https://guaxiang-ask.xxx.workers.dev
 const DEBUG = new URLSearchParams(location.search).has("debug");
 const TESTMODE = new URLSearchParams(location.search).has("test"); // 開發用：略過表情檢查
 
@@ -167,7 +225,7 @@ const $ = s => document.querySelector(s);
 const show = id => { document.querySelectorAll(".screen").forEach(e => e.classList.toggle("on", e.id === id)); window.scrollTo(0,0); };
 const loading = (on, msg="準備中") => { $("#loading").classList.toggle("on", on); $("#loadmsg").textContent = msg; };
 
-let RULES = null, landmarker = null, stream = null;
+let RULES = null, landmarker = null, stream = null, CUR = null;
 const S = { frames: [], best: null, bestScore: 1e9, bestW: 0, bestH: 0, answers: {}, hairY: null, startT: 0, running: false };
 
 // ---------- 開場 ----------
@@ -557,6 +615,9 @@ function render(R){
     </div>
   </div>
 
+  <button class="btn" id="goAsk">問古書一個問題</button>
+  <p class="small" style="margin:-4px 6px 0">填年紀、性別等簡介後，可以問錢財、感情、今年運勢，回答只根據這份報告。</p>
+
   <h2>臉形：${wx.host}形人</h2>
   <div class="card">
     <div class="mingge">
@@ -657,12 +718,14 @@ function render(R){
   show("report");
   drawAnnot("photo");
   el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { el.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x===b)); drawAnnot(b.dataset.m); });
+  CUR = { R, PAL, stRule, others, seg };
+  $("#goAsk").onclick = openAsk;
   $("#again").onclick = () => show("consent");
   $("#exportJson").onclick = () => {
     const blob = new Blob([JSON.stringify({ version: RULES.version, ...slim(R) }, null, 2)], { type:"application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "guaxiang-" + Date.now() + ".json"; a.click();
   };
-  $("#clearAll").onclick = () => { localStorage.removeItem("guaxiang-last"); S.frames = []; S.best = null; $("#report").innerHTML = ""; show("intro"); };
+  $("#clearAll").onclick = () => { Object.keys(localStorage).filter(k => k.startsWith("guaxiang-")).forEach(k => localStorage.removeItem(k)); S.frames = []; S.best = null; $("#report").innerHTML = ""; show("intro"); };
 }
 
 function drawAnnot(mode){
@@ -716,7 +779,161 @@ function renderSaved(r){
   S.answers = r.answers || {};
   render(R);
 }
-window.__guaxiang = { S, features, summarize, judgeOfficials, wuxing, get RULES(){ return RULES; } };
+
+// ---------- 問古書 ----------
+const PKEY = "guaxiang-profile", CKEY = "guaxiang-chat", KKEY = "guaxiang-apikey", AKEY = "guaxiang-ai-consent";
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+
+function liunianOf(age){
+  if (!age) return null;
+  const xu = Number(age) + 1; // 虛歲
+  const T = RULES.liunian.table;
+  const hit = T.find(r => xu >= r.from && xu <= r.to);
+  const next = T.find(r => xu + 1 >= r.from && xu + 1 <= r.to);
+  return { xu, hit, next };
+}
+const statusWord = s => s === "成" ? "合格" : s === "不成" ? "不合格" : "沒判";
+
+function buildPack(profile){
+  const { R, PAL, stRule, others, seg } = CUR;
+  const W = RULES.wuxing, T = W.types, wx = R.wx;
+  const pack = [];
+  const add = (title, text, key) => { pack.push({ id: "E" + (pack.length + 1), title, text, key }); };
+  add("這次沒看到的東西", "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看：" + RULES.cannotSee.map(c => `${c.plain}（${c.name}）：${c.why}`).join("；") + "。另外，古書的說法沒有經過科學驗證。", "cannot");
+  add(`臉形：${wx.host}形人`, `量測：臉長是寬的 ${R.F.face_aspect.v.toFixed(2)} 倍，額寬是下顎的 ${R.F.fore_jaw.v.toFixed(2)} 倍，下顎角 ${R.F.jaw_angle.v.toFixed(0)} 度。五形裡最接近${wx.host}形（${T[wx.host].plainShape}）${wx.guest ? `，也帶一點${wx.guest}形` : ""}${wx.weak ? "，但特徵不明顯" : ""}。用比例算哪一形是本工具暫定的算法；五行形本來要看全身和膚色，這裡只是臉形推估。\n古書：${T[wx.host].yuanwen}（白話：${T[wx.host].plainLine}）\n${W.notFaultPlain}${wx.rel ? "\n兼形：" + wx.rel.lines.join(" ") : ""}\n出處：${W.source}`, "wuxing");
+  add("五官怎麼算", W.guan + "「十年」只是概數。沒判的不能當成合格。", "guan");
+  R.officials.forEach(x => {
+    const rows = x.rows.map(r => `${r.pass ? "符合" : "不符合"}：${r.pass ? r.c.yes : r.c.no}`).join("；");
+    add(`五官・${x.o.plain}（${x.o.name}）：${x.status === "成" ? "量得到的條件都合格" : statusWord(x.status)}`, `${x.o.governs}。\n這次結果：${x.status === "不判" ? "沒判，" + x.why : rows}${x.o.notMeasured ? `\n量不到的：${x.o.notMeasured.join("、")}` : ""}\n古書的合格標準：${x.o.baihua}\n出處：${x.o.source}`, x.o.id);
+  });
+  if (seg && stRule){
+    add(`臉的三段（三停）：${stRule.id === "santing-equal" ? "差不多長" : "長短不一"}`, seg.map(s => `${s.k}（${s.part}，管${s.life}）是平均的 ${s.v.toFixed(2)} 倍`).join("；") + `。\n古書：${stRule.yuanwen}\n白話：${stRule.baihua}\n出處：${stRule.source}`, "santing");
+  } else add("臉的三段（三停）：沒判", "沒有拉髮際線，量不到臉的上段。", "santing");
+  others.forEach(r => add(r.headline || r.part, `${r.baihua}${r.yuanwen ? "\n古書：" + r.yuanwen : ""}${r.experimental ? "\n這是實驗項目，網頁版量不準。" : ""}${r.note ? "\n" + r.note : ""}\n出處：${r.source}`, r.id));
+  PAL.forEach(x => {
+    const g = x.g;
+    add(`十二宮・${g.topic}（${g.name}）：${x.status === "成" ? "量得到的部分合格" : x.status === "不成" ? "量得到的部分不合格" : "沒判"}`, `位置：${g.where}。\n這次結果：${x.line}${g.notMeasured && x.status !== "不判" ? "\n" + g.notMeasured : ""}${g.yuanwen ? `\n古書：${g.yuanwen}（白話：${g.baihua}）` : ""}${g.note ? "\n" + g.note : ""}${g.source ? "\n出處：" + g.source : ""}`, "gong-" + g.id);
+  });
+  const ln = liunianOf(profile?.age);
+  if (ln){
+    const keyOf = k => pack.find(e => e.key === k)?.id;
+    const desc = r => r ? `${r.name}（${r.where}）${r.layer ? "，屬於" + r.layer : ""}${r.link && keyOf(r.link) ? `，這個部位的量測結果見［${keyOf(r.link)}］` : "，這個部位這次沒有對應的量測"}` : "超出〈流年運氣部位歌〉正面路線（76 歲以後在臉的外圈），這次不判";
+    add(`今年的流年：虛歲 ${ln.xu} 歲`, `${RULES.liunian.note}\n今年（虛歲 ${ln.xu}）走到：${desc(ln.hit)}。\n明年（虛歲 ${ln.xu + 1}）走到：${desc(ln.next)}。${profile.gender ? `\n性別：${profile.gender}，傳統從${profile.gender === "男" ? "左" : "右"}邊起算。` : ""}\n出處：${RULES.liunian.source}`, "liunian");
+  }
+  return pack;
+}
+
+function openAsk(){
+  const p = lsGet(PKEY, null);
+  $("#aiConsent").checked = !!lsGet(AKEY, false);
+  $("#keyCard").style.display = (!ASK_ENDPOINT && !lsGet(KKEY, "")) ? "block" : "none";
+  fillProfile(p); showProfile(!!(p && p.age));
+  renderExamples(); renderChat(); renderLiunian();
+  show("ask");
+}
+function fillProfile(p){ p = p || {}; $("#pAge").value = p.age || ""; $("#pGender").value = p.gender || ""; $("#pRelation").value = p.relation || ""; $("#pWork").value = p.work || ""; $("#pIntro").value = p.intro || ""; }
+function showProfile(done){
+  const p = lsGet(PKEY, {});
+  $("#profileForm").style.display = done ? "none" : "block";
+  $("#profileSummary").style.display = done ? "block" : "none";
+  $("#editProfile").style.display = done ? "inline-block" : "none";
+  if (done) $("#profileText").innerHTML = [`${p.age} 歲`, p.gender, p.relation, p.work].filter(Boolean).map(esc).join("・") + (p.intro ? `<div class="small" style="margin-top:6px">${esc(p.intro)}</div>` : "");
+}
+function renderLiunian(){
+  const p = lsGet(PKEY, {}), ln = liunianOf(p.age);
+  if (!ln){ $("#liunianBox").innerHTML = ""; return; }
+  const r = ln.hit;
+  $("#liunianBox").innerHTML = `<div class="card"><div class="block"><div class="small">今年的流年・虛歲 ${ln.xu} 歲</div>
+    <div style="font-size:20px;font-weight:700;margin:4px 0">${r ? esc(r.name) : "臉的外圈"}</div>
+    <div>${r ? `${esc(r.where)}${r.layer ? `，屬於${esc(r.layer)}` : ""}` : "76 歲以後走到臉的外圈，正面拍不到，這次不判。"}</div>
+    <div class="small" style="margin-top:6px">古書說一歲對應臉上一個部位。今年就看這裡的形狀和氣色；這個工具只看得到形狀。</div></div></div>`;
+}
+function renderExamples(){
+  const p = lsGet(PKEY, {});
+  const ex = ["我今年運勢怎樣？", "古書怎麼看我的財運？", "感情方面古書怎麼說？", "我的五官哪裡最好？", "我是木形人是什麼意思？"].map(x => x.replace("木形", (CUR?.R.wx.host || "木") + "形"));
+  if (!p.age) ex.shift();
+  $("#examples").innerHTML = ex.map(x => `<button class="chip">${esc(x)}</button>`).join("");
+  $("#examples").querySelectorAll(".chip").forEach(b => b.onclick = () => { $("#qInput").value = b.textContent; $("#qInput").focus(); });
+}
+function chatKey(){ return CKEY + ":" + (CUR?.R.when || ""); }
+function renderChat(){
+  const list = lsGet(chatKey(), []);
+  $("#chat").innerHTML = list.map((h, i) => answerHTML(h, i)).join("");
+  bindCites();
+}
+function answerHTML(h, i){
+  const ids = new Set((h.pack || []).map(e => e.id));
+  let bad = false, used = 0;
+  const body = esc(h.a.replace(/\*\*/g, "")).replace(/［(E\d+)］|\[(E\d+)\]/g, (m, a, b) => { const id = a || b; if (!ids.has(id)){ bad = true; return ""; } used++; return `<button class="cite" data-i="${i}" data-id="${id}">依據${id.slice(1)}</button>`; });
+  return `<div class="qbubble">${esc(h.q)}</div>
+  <div class="card"><div class="block"><div class="answer">${body}</div>
+    ${!used ? `<div class="small warn" style="margin-top:8px">這個回答沒有標出依據，請小心看待。</div>` : ""}
+    ${bad ? `<div class="small warn" style="margin-top:8px">回答裡有引用不存在的依據，已經拿掉。</div>` : ""}
+    <div class="citebox" id="cite-${i}" style="display:none"></div>
+    <div class="small" style="margin-top:8px">點橘色標籤，看這句話根據哪一條。古書的說法沒有經過科學驗證。</div></div></div>`;
+}
+function bindCites(){
+  document.querySelectorAll("#chat .cite").forEach(b => b.onclick = () => {
+    const h = lsGet(chatKey(), [])[b.dataset.i]; const e = h.pack.find(x => x.id === b.dataset.id);
+    const box = $("#cite-" + b.dataset.i);
+    const same = box.dataset.id === b.dataset.id && box.style.display !== "none";
+    box.style.display = same ? "none" : "block"; box.dataset.id = b.dataset.id;
+    box.innerHTML = `<b>${esc(e.title)}</b>\n${esc(e.text)}`;
+  });
+}
+
+$("#saveProfile").onclick = () => {
+  const age = parseInt($("#pAge").value, 10);
+  if (!age){ alert("請填年紀，流年要用。"); return; }
+  if (age < 18){ alert("這個工具只給滿 18 歲的人使用。"); return; }
+  if (age > 120){ alert("年紀好像打錯了。"); return; }
+  lsSet(PKEY, { age, gender: $("#pGender").value, relation: $("#pRelation").value, work: $("#pWork").value, intro: $("#pIntro").value.trim() });
+  showProfile(true); renderLiunian(); renderExamples();
+};
+$("#editProfile").onclick = () => { fillProfile(lsGet(PKEY, {})); showProfile(false); };
+$("#aiConsent").onchange = e => lsSet(AKEY, e.target.checked);
+$("#saveKey").onclick = () => { const k = $("#apiKey").value.trim(); if (!k) return; lsSet(KKEY, k); $("#apiKey").value = ""; $("#keyCard").style.display = "none"; };
+$("#backReport").onclick = () => show("report");
+$("#clearChat").onclick = () => { localStorage.removeItem(chatKey()); renderChat(); };
+
+async function callAI(payload){
+  if (ASK_ENDPOINT){
+    const r = await fetch(ASK_ENDPOINT, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(payload) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ("HTTP " + r.status));
+    return d.text;
+  }
+  const key = lsGet(KKEY, "");
+  if (!key) throw new Error("還沒設定中繼站，也沒有金鑰。");
+  const { system, messages } = buildRequest(payload);
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST",
+    headers:{ "content-type":"application/json", "x-api-key": key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+    body: JSON.stringify({ model:"claude-sonnet-5-5", max_tokens:900, system, messages }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d?.error?.message || ("HTTP " + r.status));
+  return (d.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim();
+}
+$("#askBtn").onclick = async () => {
+  const q = $("#qInput").value.trim(); if (!q) return;
+  const p = lsGet(PKEY, null);
+  if (!p || !p.age){ alert("先填簡介並按「存好簡介」。"); return; }
+  if (!$("#aiConsent").checked){ alert("要先勾選同意，才能把文字傳給 AI。"); $("#aiConsentCard").scrollIntoView({ behavior:"smooth" }); return; }
+  if (!ASK_ENDPOINT && !lsGet(KKEY, "")){ $("#keyCard").style.display = "block"; alert("中繼站還沒架好，請先貼金鑰。"); return; }
+  const pack = buildPack(p).map(({ id, title, text }) => ({ id, title, text }));
+  const list = lsGet(chatKey(), []);
+  const history = list.slice(-3).map(h => ({ q: h.q, a: h.a }));
+  $("#askBtn").disabled = true; $("#askBtn").textContent = "古書翻閱中…";
+  try {
+    const a = await callAI({ pack, profile: p, question: q, history });
+    list.push({ q, a, pack, t: Date.now() }); lsSet(chatKey(), list);
+    $("#qInput").value = ""; renderChat();
+    setTimeout(() => $("#chat").lastElementChild?.scrollIntoView({ behavior:"smooth", block:"start" }), 50);
+  } catch(err){ alert("問不到：" + err.message); }
+  finally { $("#askBtn").disabled = false; $("#askBtn").textContent = "問"; }
+};
+
+window.__guaxiang = { buildPack, get CUR(){ return CUR; }, S, features, summarize, judgeOfficials, wuxing, get RULES(){ return RULES; } };
 </script>
 </body>
 </html>

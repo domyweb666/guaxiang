@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "note": "瓜相 MVP 規則庫。門檻全部是暫定值，等收到 50 人資料後用排名重切。原文欄標「待摘錄」的，請從古籍原書摘錄後替換。",
   "features": {
     "santing_U": {
@@ -612,5 +612,403 @@
       "notMeasured": "「五嶽」是額頭、鼻子、兩顴、下巴的高低，要深度，這裡只量了三段長短。",
       "source": "《麻衣相法》〈十二宮〉（2-5）"
     }
-  ]
+  ],
+  "liunian": {
+    "note": "流年：古書把一歲對應臉上一個部位，看今年走到哪裡。依〈流年運氣部位歌〉，用虛歲（實歲加一），傳統男生從左邊起、女生從右邊起。古書要看那個部位的形狀和氣色，這個工具只看得到形狀，氣色不判。",
+    "source": "〈流年運氣部位歌〉，《神相全編》、《麻衣相法》都有收（2-6）",
+    "table": [
+      {
+        "from": 15,
+        "to": 15,
+        "name": "火星",
+        "where": "額頭最上面正中間",
+        "layer": "官祿宮附近（工作事業）",
+        "link": null
+      },
+      {
+        "from": 16,
+        "to": 16,
+        "name": "天中",
+        "where": "額頭上方正中間",
+        "layer": "官祿宮附近（工作事業）",
+        "link": null
+      },
+      {
+        "from": 17,
+        "to": 17,
+        "name": "日角",
+        "where": "額頭上方左右兩側",
+        "layer": "父母（現代十二宮的父母宮）",
+        "link": null
+      },
+      {
+        "from": 18,
+        "to": 18,
+        "name": "月角",
+        "where": "額頭上方左右兩側",
+        "layer": "父母（現代十二宮的父母宮）",
+        "link": null
+      },
+      {
+        "from": 19,
+        "to": 19,
+        "name": "天庭",
+        "where": "額頭上半部正中間",
+        "layer": "官祿宮附近（工作事業）",
+        "link": null
+      },
+      {
+        "from": 20,
+        "to": 21,
+        "name": "輔角",
+        "where": "額頭上方兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 22,
+        "to": 22,
+        "name": "司空",
+        "where": "額頭正中間偏上",
+        "layer": "官祿宮附近（工作事業）",
+        "link": null
+      },
+      {
+        "from": 23,
+        "to": 24,
+        "name": "邊城",
+        "where": "額頭兩側邊緣",
+        "layer": "遷移宮附近（出外搬家）",
+        "link": "gong-qianyi"
+      },
+      {
+        "from": 25,
+        "to": 25,
+        "name": "中正",
+        "where": "額頭正中間",
+        "layer": "官祿宮（工作事業）",
+        "link": "gong-guanlu"
+      },
+      {
+        "from": 26,
+        "to": 26,
+        "name": "丘陵",
+        "where": "額頭兩側偏下",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 27,
+        "to": 27,
+        "name": "塚墓",
+        "where": "額頭兩側偏下",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 28,
+        "to": 28,
+        "name": "印堂",
+        "where": "兩眉中間",
+        "layer": "命宮（整體運勢）",
+        "link": "gong-ming"
+      },
+      {
+        "from": 29,
+        "to": 30,
+        "name": "山林",
+        "where": "額頭兩側、眉毛上方",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 31,
+        "to": 31,
+        "name": "凌雲",
+        "where": "眉頭",
+        "layer": "兄弟宮（兄弟朋友）、保壽官（眉毛）",
+        "link": "guan-brow"
+      },
+      {
+        "from": 32,
+        "to": 32,
+        "name": "紫氣",
+        "where": "眉頭",
+        "layer": "兄弟宮（兄弟朋友）、保壽官（眉毛）",
+        "link": "guan-brow"
+      },
+      {
+        "from": 33,
+        "to": 33,
+        "name": "繁霞",
+        "where": "眉尾",
+        "layer": "兄弟宮（兄弟朋友）、保壽官（眉毛）",
+        "link": "guan-brow"
+      },
+      {
+        "from": 34,
+        "to": 34,
+        "name": "彩霞",
+        "where": "眉尾",
+        "layer": "兄弟宮（兄弟朋友）、保壽官（眉毛）",
+        "link": "guan-brow"
+      },
+      {
+        "from": 35,
+        "to": 35,
+        "name": "太陽",
+        "where": "兩隻眼睛",
+        "layer": "田宅宮（房子家產）、監察官（眼睛）",
+        "link": "guan-eye"
+      },
+      {
+        "from": 36,
+        "to": 36,
+        "name": "太陰",
+        "where": "兩隻眼睛",
+        "layer": "田宅宮（房子家產）、監察官（眼睛）",
+        "link": "guan-eye"
+      },
+      {
+        "from": 37,
+        "to": 37,
+        "name": "中陽",
+        "where": "兩隻眼睛",
+        "layer": "田宅宮（房子家產）、監察官（眼睛）",
+        "link": "guan-eye"
+      },
+      {
+        "from": 38,
+        "to": 38,
+        "name": "中陰",
+        "where": "兩隻眼睛",
+        "layer": "田宅宮（房子家產）、監察官（眼睛）",
+        "link": "guan-eye"
+      },
+      {
+        "from": 39,
+        "to": 39,
+        "name": "少陽",
+        "where": "兩隻眼睛",
+        "layer": "田宅宮（房子家產）、監察官（眼睛）",
+        "link": "guan-eye"
+      },
+      {
+        "from": 40,
+        "to": 40,
+        "name": "少陰",
+        "where": "兩隻眼睛",
+        "layer": "田宅宮（房子家產）、監察官（眼睛）",
+        "link": "guan-eye"
+      },
+      {
+        "from": 41,
+        "to": 41,
+        "name": "山根",
+        "where": "鼻根，兩眼中間最低的地方",
+        "layer": "疾厄宮（健康，本工具不判）",
+        "link": null
+      },
+      {
+        "from": 42,
+        "to": 42,
+        "name": "精舍",
+        "where": "鼻根兩側、靠近眼頭",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 43,
+        "to": 43,
+        "name": "光殿",
+        "where": "鼻根兩側、靠近眼頭",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 44,
+        "to": 44,
+        "name": "年上",
+        "where": "鼻樑中段",
+        "layer": "財帛宮（錢財）、審辨官（鼻子）",
+        "link": "guan-nose"
+      },
+      {
+        "from": 45,
+        "to": 45,
+        "name": "壽上",
+        "where": "鼻樑中段偏下",
+        "layer": "財帛宮（錢財）、審辨官（鼻子）",
+        "link": "guan-nose"
+      },
+      {
+        "from": 46,
+        "to": 47,
+        "name": "兩顴",
+        "where": "兩邊顴骨",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 48,
+        "to": 48,
+        "name": "準頭",
+        "where": "鼻頭",
+        "layer": "財帛宮（錢財）、審辨官（鼻子）",
+        "link": "guan-nose"
+      },
+      {
+        "from": 49,
+        "to": 49,
+        "name": "蘭台",
+        "where": "兩邊鼻翼",
+        "layer": "財帛宮（錢財）",
+        "link": "gong-caibo"
+      },
+      {
+        "from": 50,
+        "to": 50,
+        "name": "廷尉",
+        "where": "兩邊鼻翼",
+        "layer": "財帛宮（錢財）",
+        "link": "gong-caibo"
+      },
+      {
+        "from": 51,
+        "to": 51,
+        "name": "人中",
+        "where": "鼻子和嘴唇中間的溝",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 52,
+        "to": 53,
+        "name": "仙庫",
+        "where": "嘴巴上方兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 54,
+        "to": 54,
+        "name": "食倉",
+        "where": "嘴巴上方兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 55,
+        "to": 55,
+        "name": "祿倉",
+        "where": "嘴巴上方兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 56,
+        "to": 57,
+        "name": "法令",
+        "where": "鼻翼往嘴角的兩條紋",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 58,
+        "to": 59,
+        "name": "虎耳",
+        "where": "嘴角外側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 60,
+        "to": 60,
+        "name": "水星",
+        "where": "嘴巴",
+        "layer": "出納官（嘴巴）",
+        "link": "guan-mouth"
+      },
+      {
+        "from": 61,
+        "to": 61,
+        "name": "承漿",
+        "where": "下唇下面的凹處",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 62,
+        "to": 63,
+        "name": "地庫",
+        "where": "下巴兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 64,
+        "to": 64,
+        "name": "陂池",
+        "where": "下巴兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 65,
+        "to": 65,
+        "name": "鵝鴨",
+        "where": "下巴兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 66,
+        "to": 67,
+        "name": "金縷",
+        "where": "下巴兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 68,
+        "to": 69,
+        "name": "歸來",
+        "where": "下巴兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 70,
+        "to": 70,
+        "name": "頌堂",
+        "where": "下巴兩側",
+        "layer": "",
+        "link": null
+      },
+      {
+        "from": 71,
+        "to": 71,
+        "name": "地閣",
+        "where": "下巴",
+        "layer": "奴僕宮（下屬團隊）",
+        "link": "gong-nupu"
+      },
+      {
+        "from": 72,
+        "to": 73,
+        "name": "奴僕",
+        "where": "下巴兩側",
+        "layer": "奴僕宮（下屬團隊）",
+        "link": "gong-nupu"
+      },
+      {
+        "from": 74,
+        "to": 75,
+        "name": "腮骨",
+        "where": "兩腮",
+        "layer": "",
+        "link": null
+      }
+    ]
+  }
 }
