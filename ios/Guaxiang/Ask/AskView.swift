@@ -127,7 +127,7 @@ struct AskView: View {
     }
 
     private func choice(_ title: String, _ options: [String], _ value: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: Theme.small) {
+        VStack(alignment: .leading, spacing: Theme.item) {
             Note(title)
             Picker(title, selection: value) {
                 Text("不想說").tag("")
@@ -271,7 +271,7 @@ struct AskView: View {
                 .disabled(busy || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if let left = Paywall.questionsLeft { Note("還可以問 \(left) 題") }
         }
-        .padding(.horizontal, Theme.margin)
+        .padding(.horizontal, Theme.screenMargin)
         .padding(.vertical, 10)
         .background(Theme.canvas)
     }

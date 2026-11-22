@@ -6,35 +6,46 @@ extension VeggieConfig {
     static let app = VeggieConfig(
         name: "瓜相",
         slug: "guaxiang",
-        tagline: "掃一次臉，看懂古書怎麼說你",
+        tagline: "掃一次臉，看古書怎麼說你",
         appStoreID: nil,
         supportEmail: nil,
         privacyURL: nil
     )
 }
 
-/// 設定頁。區塊順序照《蔬菜家族共用規格》：一般、資料、支援、關於，最下面是共用頁尾。
-/// 「購買」那一區等第 8 步接 StoreKit 再放。
+/// 設定頁。區塊順序照蔬菜家族固定順序（準則 3-3）：app 專屬 → 一般 → 資料 → 購買 → 支援 → 關於 → 頁尾。
+/// 只放現在能用的列（3-4）：沒有報告就不放匯出；StoreKit 還沒接就不放購買那一區。
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
     @AppStorage(VeggieHaptics.storageKey) private var haptics = true
     @State private var confirmErase = false
+    @State private var confirmEraseAgain = false
+    @State private var showPaywall = false
     @State private var toast: String?
 
     private let config = VeggieConfig.app
 
     private var style: VeggieStyle {
         VeggieStyle(
-            textPrimary: .primary, textSecondary: .secondary, textTertiary: Color(uiColor: .tertiaryLabel),
-            accent: Theme.accent, destructive: Theme.bad, canvas: Theme.canvas, surface: Theme.card, body: .body,
-            headline: .headline, subheadline: .subheadline, footnote: .footnote, rowHeight: 52)
+            textPrimary: .primary, textSecondary: Theme.secondary, textTertiary: Theme.tertiary,
+            accent: Theme.accent, destructive: Theme.danger, canvas: Theme.canvas, surface: Theme.card, body: .body,
+            headline: .headline, subheadline: .subheadline, footnote: .footnote, rowHeight: Theme.rowHeight)
     }
 
     var body: some View {
         NavigationStack {
             Page {
+                PageTitle(title: "設定", pushed: true)
+                group(nil) {
+                    NavigationLink {
+                        PrivacyNoteView()
+                    } label: {
+                        VeggieRow(icon: "lock", title: "你的資料去了哪裡", accessory: .push)
+                    }
+                }
+
                 group(VeggieText.general) {
                     Menu {
                         Picker(VeggieText.appearance, selection: $appearance) {
@@ -50,16 +61,32 @@ struct SettingsView: View {
                 }
 
                 group(VeggieText.data) {
-                    NavigationLink {
-                        PrivacyNoteView()
-                    } label: {
-                        VeggieRow(icon: "lock", title: "資料存在哪裡", accessory: .push)
+                    if let saved = model.saved {
+                        ShareLink(item: exportJSON(saved.measurement), preview: SharePreview("瓜相量測數字")) {
+                            VeggieRow(icon: "square.and.arrow.up", title: VeggieText.exportData, value: "只有數字")
+                        }
+                        divider
                     }
-                    divider
                     Button {
                         confirmErase = true
                     } label: {
                         VeggieRow(icon: "trash", title: VeggieText.eraseAll, destructive: true)
+                    }
+                }
+
+                if Paywall.enforced {
+                    group(VeggieText.purchase) {
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            VeggieRow(icon: "book.closed", title: "完整版", accessory: .push)
+                        }
+                        divider
+                        Button {
+                            // 第 8 步接 StoreKit 時從這裡接（Store/Storage.swift 的 Paywall）
+                        } label: {
+                            VeggieRow(icon: "arrow.clockwise", title: VeggieText.restore)
+                        }
                     }
                 }
 
@@ -88,45 +115,67 @@ struct SettingsView: View {
                 #endif
 
                 VeggieFooter(config: config, logo: Image("Logo")) { toast = $0 }
+                    .padding(.top, Theme.footerTop - Theme.section - Theme.group)
                 if let toast { Note(toast).frame(maxWidth: .infinity) }
             }
             .buttonStyle(.plain)
             .veggieStyle(style)
-            .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.fontWeight(.semibold) }
             }
             .onChange(of: appearance) { _, value in (Appearance(rawValue: value) ?? .system).apply() }
-            .confirmationDialog("清除報告、簡介和問答紀錄？清掉就救不回來。", isPresented: $confirmErase, titleVisibility: .visible) {
-                Button(VeggieText.eraseAll, role: .destructive) {
+            // 清除問兩次，兩次的按鈕字不同（準則 3-3、5-26）。購買紀錄不動
+            .confirmationDialog(
+                "要清除報告、簡介和問答紀錄嗎？想留數字的話，先用上面的「匯出資料」。",
+                isPresented: $confirmErase, titleVisibility: .visible
+            ) {
+                Button("繼續清除", role: .destructive) { confirmEraseAgain = true }
+            }
+            .alert("清掉就救不回來", isPresented: $confirmEraseAgain) {
+                Button("永久刪除", role: .destructive) {
                     model.eraseAll()
                     dismiss()
                 }
+                Button("先不用", role: .cancel) {}
+            } message: {
+                Text("手機裡的報告、簡介和問答紀錄會全部刪掉，app 回到第一次打開的樣子。已經買的完整版不受影響。")
             }
+            .sheet(isPresented: $showPaywall) { PaywallView() }
         }
     }
 
     private var divider: some View {
-        Rectangle().fill(Theme.separator).frame(height: 0.5).padding(.leading, 36)
+        Rectangle().fill(Theme.separator).frame(height: Theme.hairline).padding(.leading, Theme.touch)
     }
 
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Theme.small) {
-            Text(title).font(.footnote).foregroundStyle(Theme.secondary).padding(.horizontal, Theme.cardPadding)
+    private func group<Content: View>(_ title: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Theme.item) {
+            if let title {
+                Text(title).font(.footnote).foregroundStyle(Theme.secondary).padding(.horizontal, Theme.cardPad)
+            }
             VStack(spacing: 0) { content() }
-                .padding(.horizontal, Theme.cardPadding)
+                .padding(.horizontal, Theme.cardPad)
                 .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         }
-        .padding(.top, Theme.small)
+        .padding(.top, Theme.section - Theme.group)
+    }
+
+    private func exportJSON(_ m: Measurement) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(m) else { return "{}" }
+        return String(data: data, encoding: .utf8) ?? "{}"
     }
 }
 
-/// 資料存在哪裡。上架時的隱私權政策會照這一頁的內容寫（HANDOFF 第九節）
+/// 你的資料去了哪裡。上架時的隱私權政策會照這一頁的內容寫（HANDOFF 第九節）
 struct PrivacyNoteView: View {
     var body: some View {
         Page {
+            PageTitle(title: "你的資料去了哪裡", pushed: true)
             Card {
                 CardBlock(divider: false) {
                     Text("只在這支手機上").font(.headline)
@@ -138,7 +187,7 @@ struct PrivacyNoteView: View {
                 }
                 CardBlock {
                     Text("會離開手機的").font(.headline)
-                    Text("只有「問古書」：你勾了同意、按下「問」之後，簡介、問題和這次量測結果的文字整理會傳給 AI（Anthropic 的 Claude）產生回答。照片和臉部座標不在裡面。")
+                    Text("只有「問古書」：你勾了同意、按下送出之後，簡介、問題和這次量測結果的文字整理會傳給 AI（Anthropic 的 Claude）產生回答。照片和臉部座標不在裡面。")
                 }
                 CardBlock {
                     Text("不做的事").font(.headline)
@@ -146,7 +195,6 @@ struct PrivacyNoteView: View {
                 }
             }
         }
-        .navigationTitle("資料存在哪裡")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

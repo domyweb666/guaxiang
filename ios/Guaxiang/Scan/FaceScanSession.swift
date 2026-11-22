@@ -39,6 +39,9 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
     @Published var count = 0
     @Published var finished: ScanCapture?
     @Published var failure: String?
+    /// 掃不了的兩種情況，畫面換成整頁說明（準則 3-32、10-7）
+    enum Blocked { case denied, unsupported }
+    @Published var blocked: Blocked?
     @Published var snapshot: MeshSnapshot?
     @Published var debugLine = ""
 
@@ -79,9 +82,10 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         count = 0
         finished = nil
         failure = nil
+        blocked = nil
         snapshot = nil
         guard Self.isSupported else {
-            failure = "這支手機不支援臉部追蹤，這一版還不能掃。"
+            blocked = .unsupported
             return
         }
         let config = ARFaceTrackingConfiguration()
@@ -106,7 +110,9 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
     func session(_ session: ARSession, didFailWithError error: Error) {
         let denied = (error as? ARError)?.code == .cameraUnauthorized
         let message = denied ? "相機沒有打開。請到「設定 → 瓜相」把相機打開再回來。" : "相機啟動失敗：\(error.localizedDescription)"
-        DispatchQueue.main.async { self.failure = message }
+        DispatchQueue.main.async {
+            if denied { self.blocked = .denied } else { self.failure = message }
+        }
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
