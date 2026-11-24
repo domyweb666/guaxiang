@@ -32,7 +32,9 @@ final class AppModel: ObservableObject {
     /// 手機裡存的上一次報告，首頁拿來顯示摘要
     @Published var saved: Report?
     @Published var answers = Answers()
-    /// 這次掃描最正的那一張。只留在記憶體裡，關掉 app 就沒了
+    /// 上一次報告的照片和標註。只存在這支手機
+    @Published var photo: FacePhoto?
+    /// 這次掃描收到的東西。只留在記憶體裡，關掉 app 就沒了
     @Published var capture: ScanCapture?
 
     let rules: Rules?
@@ -45,6 +47,7 @@ final class AppModel: ObservableObject {
         rules = try? Rules.load()
         if let rules, let m = storage.load(Measurement.self, from: .measurement) {
             saved = Report(measurement: m, rules: rules)
+            photo = storage.loadPhoto(when: m.when)
         }
     }
 
@@ -92,7 +95,7 @@ final class AppModel: ObservableObject {
     }
 
     /// 掃完、髮際線也拉完（或跳過）：算特徵、取中位數、比對規則、存檔
-    func finish(hairRatio: Double?) {
+    func finish(hairRatio: Double?, hairY: Double? = nil) {
         guard let rules, let capture else {
             path = []
             return
@@ -105,12 +108,22 @@ final class AppModel: ObservableObject {
             frames: capture.frames.count, light: Stats.median(capture.lights),
             hasHair: hairRatio != nil && F["santing_U"] != nil, answers: answers, F: F,
             rulesVersion: rules.version, gaps: capture.gaps)
-        show(measurement)
+        show(measurement, photo: makePhoto(capture.best, measurement, hairY: hairY))
     }
 
-    func show(_ measurement: Measurement) {
+    private func makePhoto(_ best: BestShot, _ measurement: Measurement, hairY: Double?) -> FacePhoto? {
+        guard let image = best.image else { return nil }
+        var marks = best.marks
+        marks.when = measurement.when
+        marks.hairY = measurement.hasHair ? hairY : nil
+        return FacePhoto(image: image, marks: marks)
+    }
+
+    func show(_ measurement: Measurement, photo newPhoto: FacePhoto?) {
         guard let rules else { return }
         storage.save(measurement, to: .measurement)
+        if let newPhoto { storage.savePhoto(newPhoto) } else { storage.removePhoto() }
+        photo = newPhoto
         storage.remove(.chat)
         let r = Report(measurement: measurement, rules: rules)
         saved = r
@@ -124,6 +137,7 @@ final class AppModel: ObservableObject {
         storage.eraseAll()
         report = nil
         saved = nil
+        photo = nil
         capture = nil
         isSample = false
         path = []

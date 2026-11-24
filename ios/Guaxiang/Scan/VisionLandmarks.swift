@@ -9,7 +9,11 @@ struct VisionFace {
     var browB: [UV]
     var outerLips: [UV]
     var innerLips: [UV]
+    /// 兩隻眼睛的中心
     var eyes: [UV]
+    /// 兩隻眼睛的輪廓
+    var eyeA: [UV]
+    var eyeB: [UV]
 }
 
 /// 相機原始畫面是橫的。這裡記著：轉哪個方向臉才是正的，以及 Vision 的座標怎麼換回原始畫面的座標。
@@ -35,7 +39,8 @@ struct VisionCalibration {
     }
 }
 
-/// 用 Vision 在照片上找眉毛和嘴唇的輪廓。ARKit 的網格是皮膚表面，量不到眉毛（毛髮），嘴唇輪廓也被抹平了（HANDOFF 4-2）。
+/// 用 Vision 在照片上找眉毛、眼睛和嘴唇的輪廓。ARKit 的網格是皮膚表面，量不到眉毛（毛髮），嘴唇輪廓也被抹平了（HANDOFF 4-2）；
+/// 網格上眼睛的洞是往裡摺的眼皮，比看得到的眼睛窄，而且眉毛要跟眼角比，所以眼睛也用同一個來源。
 /// 全部在手機上算，不連網。
 enum VisionLandmarks {
     /// 四個方向各自對應的座標換法（照 CGImagePropertyOrientation 的定義推出來的）
@@ -73,7 +78,8 @@ enum VisionLandmarks {
         }
         return VisionFace(
             browA: points(marks.leftEyebrow), browB: points(marks.rightEyebrow), outerLips: points(marks.outerLips),
-            innerLips: points(marks.innerLips), eyes: eyes)
+            innerLips: points(marks.innerLips), eyes: eyes, eyeA: points(marks.leftEye),
+            eyeB: points(marks.rightEye))
     }
 
     /// 試四個方向，看哪一個方向 Vision 找到的眼睛和嘴，跟 ARKit 算出來的位置對得上。

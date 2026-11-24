@@ -109,7 +109,7 @@ struct SettingsView: View {
                         NavigationLink {
                             DevToolsView()
                         } label: {
-                            VeggieRow(icon: "wrench.and.screwdriver", title: "頂點對照、範例報告、金鑰", accessory: .push)
+                            VeggieRow(icon: "wrench.and.screwdriver", title: "範例報告、金鑰", accessory: .push)
                         }
                     }
                 #endif
@@ -127,7 +127,7 @@ struct SettingsView: View {
             .onChange(of: appearance) { _, value in (Appearance(rawValue: value) ?? .system).apply() }
             // 清除問兩次，兩次的按鈕字不同（準則 3-3、5-26）。購買紀錄不動
             .confirmationDialog(
-                "要清除報告、簡介和問答紀錄嗎？想留數字的話，先用上面的「匯出資料」。",
+                "要清除報告、照片、簡介和問答紀錄嗎？想留數字的話，先用上面的「匯出資料」。",
                 isPresented: $confirmErase, titleVisibility: .visible
             ) {
                 Button("繼續清除", role: .destructive) { confirmEraseAgain = true }
@@ -139,7 +139,7 @@ struct SettingsView: View {
                 }
                 Button("先不用", role: .cancel) {}
             } message: {
-                Text("手機裡的報告、簡介和問答紀錄會全部刪掉，app 回到第一次打開的樣子。已經買的完整版不受影響。")
+                Text("手機裡的報告、照片、簡介和問答紀錄會全部刪掉，app 回到第一次打開的樣子。已經買的完整版不受影響。")
             }
             .sheet(isPresented: $showPaywall) { PaywallView() }
         }
@@ -179,11 +179,11 @@ struct PrivacyNoteView: View {
             Card {
                 CardBlock(divider: false) {
                     Text("只在這支手機上").font(.headline)
-                    Text("相機畫面、臉部網格、深度資料只在掃描當下用來算比例，算完就丟，不存檔、不上傳。照片也不存。")
+                    Text("相機畫面、臉部網格、深度資料只在掃描當下用來算比例，算完就丟。只留最正的那一張照片和上面的標註位置，放在報告最上面。")
                 }
                 CardBlock {
                     Text("存在手機裡的").font(.headline)
-                    Text("上一次的量測數字、你填的簡介、問答紀錄。按「清除所有資料」會全部刪掉。")
+                    Text("上一次的照片和標註位置、量測數字、你填的簡介、問答紀錄。照片鎖機的時候讀不到，也不會跟著 iCloud 備份走。按「清除所有資料」會全部刪掉。")
                 }
                 CardBlock {
                     Text("會離開手機的").font(.headline)

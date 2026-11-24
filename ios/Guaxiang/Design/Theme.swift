@@ -33,6 +33,17 @@ enum Theme {
     static let secondary = dynamic(0x66666D, 0xA1A1A8)
     static let tertiary = dynamic(0xA1A1A6, 0x636366)
 
+    // MARK: 照片上的標註（疊在照片上，淺色深色都一樣）
+
+    static let markBrow = fixed(0xC77DFF)
+    static let markEye = fixed(0x3DA5FF)
+    static let markNose = fixed(0x3DDC84)
+    static let markMouth = fixed(0xFF6B8A)
+    static let markLine = fixed(0xFFB224)
+    /// 壓在 markLine 上的字
+    static let markLineText = fixed(0x2A1A00)
+    static let markWidth: CGFloat = 2
+
     // MARK: 間距用途名（domy-design layout，準則 3-46）
 
     static let pageTop: CGFloat = 40
@@ -61,6 +72,7 @@ enum Theme {
     static let markSize: CGFloat = 72
     static let emptyIcon: CGFloat = 64
     static let hairline: CGFloat = 1
+    static let sketchWidth: CGFloat = 180
 
     // MARK: 動作（附錄 E 步驟 4）
 
@@ -76,6 +88,10 @@ enum Theme {
     static let quote = Font.custom("Songti TC", size: 17, relativeTo: .body)
     static let quoteLarge = Font.custom("Songti TC", size: 20, relativeTo: .title3)
     static let mark = Font.custom("Songti TC", size: 36, relativeTo: .largeTitle).weight(.bold)
+
+    private static func fixed(_ hex: UInt32) -> Color {
+        Color(uiColor: rgb(hex))
+    }
 
     private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(

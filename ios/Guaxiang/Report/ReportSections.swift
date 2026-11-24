@@ -35,7 +35,7 @@ struct ReportSectionView: View {
         case .palaces: return rules.palacesNote
         case .others: return "這次量測對得上的其他古書條文。"
         case .cannotSee: return "算命先生當面會看、相機拍不到的。"
-        case .diagram: return "量測用到的點畫成線條。照片沒有存下來。"
+        case .diagram: return "量測用到的位置。照片只存在這支手機。"
         case .numbers: return "給想核對算法的人。"
         }
     }
@@ -304,10 +304,13 @@ struct ReportSectionView: View {
     // MARK: 標註圖
 
     private var diagramSection: some View {
-        Card {
-            CardBlock(divider: false) {
-                FaceDiagram(frame: model.isSample ? nil : model.capture?.best.frame, hasHair: m.hasHair)
-                Note("紅色虛線是三段的分界線。這張圖只畫量測用到的點，不是照片。")
+        VStack(alignment: .leading, spacing: Theme.group) {
+            if !model.isSample, let photo = model.photo { AnnotatedPhoto(photo: photo) }
+            Card {
+                CardBlock(divider: false) {
+                    FaceDiagram(frame: model.isSample ? nil : model.capture?.best.frame)
+                    Note("紅色虛線是三段的分界線。這張只畫線條，把臉攤平、去掉鏡頭的變形，數字是照這張算的。")
+                }
             }
         }
     }
@@ -342,7 +345,7 @@ struct ReportSectionView: View {
                 }
             }
             CardBlock {
-                Note("公式裡括號的數字是網頁版的點位編號；iOS 版用的是同一個位置的 ARKit 網格頂點。")
+                Note("公式裡括號的數字是網頁版的點位編號；iOS 版在臉部網格和照片上取同一個位置。")
                 Note(String(format: "平均光線亮度 %.0f／255・規則庫 %@", m.light, m.rulesVersion))
             }
         }
@@ -375,7 +378,6 @@ struct StatusBar: View {
 /// 標註圖：把量測用到的點畫成線條。沒有這次掃描的點（例如打開的是上一次的報告）就說明原因。
 struct FaceDiagram: View {
     let frame: FaceFrame?
-    let hasHair: Bool
 
     var body: some View {
         if let frame, let aligned = Geometry.align(frame)?.points, let box = bounds(aligned) {
@@ -409,7 +411,7 @@ struct FaceDiagram: View {
             .frame(maxWidth: .infinity)
             .accessibilityLabel("量測點的線條圖")
         } else {
-            Note("這份報告只存了數字，沒有存臉上的點，所以畫不出標註圖。再掃一次就會有。")
+            Note("線條圖只有剛掃完看得到，關掉 app 之後不留。")
         }
     }
 

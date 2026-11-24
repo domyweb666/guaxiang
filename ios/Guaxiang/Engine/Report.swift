@@ -1,6 +1,6 @@
 import Foundation
 
-/// 存在手機裡的那一份：只有量出來的數字和掃描前的勾選，沒有照片、沒有臉部座標。
+/// 存在手機裡的那一份：只有量出來的數字和掃描前的勾選。照片另外存（Store/FacePhoto.swift），匯出時不帶。
 /// 合格不合格每次打開都照 rules.json 重新比一次，所以規則庫更新後舊報告會跟著新規則走。
 struct Measurement: Codable, Equatable {
     var when: Date

@@ -70,6 +70,7 @@ struct ReportView: View {
                     ? "數字是假的，不是你的臉。用來看報告長什麼樣。"
                     : "\(m.when.formatted(date: .long, time: .omitted))・收了 \(m.frames) 張畫面",
                 pushed: true)
+            photoCard
             if !m.gaps.isEmpty { gaps }
 
             SectionTitle("古書怎麼說你")
@@ -108,6 +109,22 @@ struct ReportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAsk) { AskView(report: report) }
         .sheet(isPresented: $showPaywall) { PaywallView() }
+    }
+
+    /// 最上面：這次掃的照片，標出量測的位置（QC-0006 第 2 筆）
+    @ViewBuilder private var photoCard: some View {
+        if model.isSample {
+            Card {
+                FaceSketch()
+                    .frame(maxWidth: Theme.sketchWidth)
+                    .frame(maxWidth: .infinity)
+                    .padding(Theme.cardPad)
+            }
+        } else if let photo = model.photo {
+            AnnotatedPhoto(photo: photo)
+        } else {
+            Note("這份報告是之前的版本掃的，沒有留照片。再掃一次，照片和標註會放在這裡。").padding(.horizontal, Theme.tight)
+        }
     }
 
     private func value(_ s: ReportSection) -> String? {
@@ -178,7 +195,7 @@ struct ReportView: View {
     private var gaps: some View {
         Card {
             CardBlock(divider: false) {
-                Text("這一版還量不到的").font(.headline)
+                Text("這次量不到的").font(.headline)
                 ForEach(m.gaps, id: \.self) { Note($0, warn: true) }
                 Note("量不到的項目一律寫「沒判」，沒有拿別的數字湊。")
             }

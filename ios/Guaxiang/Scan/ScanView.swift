@@ -21,7 +21,7 @@ struct ScanView: View {
         }
         .navigationBarBackButtonHidden(session.blocked == nil)
         .toolbar(session.blocked == nil ? .hidden : .visible, for: .navigationBar)
-        .onAppear { session.start(collect: true) }
+        .onAppear { session.start() }
         .onDisappear { session.stop() }
         .onReceive(session.$finished) { capture in
             if let capture { model.scanFinished(capture) }
@@ -37,7 +37,7 @@ struct ScanView: View {
                 }
                 .frame(minWidth: Theme.touch, minHeight: Theme.touch)
                 Spacer()
-                Text("相機畫面不存檔、不上傳").font(.footnote)
+                Text("只留一張照片在手機裡，不上傳").font(.footnote)
             }
             .foregroundStyle(ScanColor.text)
             .padding(.horizontal, Theme.screenMargin)
@@ -146,7 +146,7 @@ struct ScanBlockedView: View {
             } description: {
                 Text(
                     blocked == .denied
-                        ? "瓜相用前鏡頭量臉的比例。畫面只在手機上處理，不存檔、不上傳。到設定打開相機就能掃。"
+                        ? "瓜相用前鏡頭量臉的比例。畫面只在手機上處理，不上傳。到設定打開相機就能掃。"
                         : "瓜相要用 Face ID 那顆原深感相機量臉。這支手機沒有，這一版還不能掃。")
             }
             VStack(spacing: Theme.item) {
@@ -195,7 +195,7 @@ struct HairlineView: View {
                 .padding(.bottom, Theme.section)
             }
             BottomBar {
-                Button("就是這裡，看報告") { model.finish(hairRatio: ratio()) }
+                Button("就是這裡，看報告") { model.finish(hairRatio: ratio(), hairY: lineY) }
                     .buttonStyle(.primary)
                 Button("我有瀏海，跳過（三停不判）") { model.finish(hairRatio: nil) }
                     .buttonStyle(.textOnly)

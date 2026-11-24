@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// 手機裡存的東西：上一次的量測數字、簡介、問答紀錄。都在 App 自己的資料夾裡，不上傳、不存照片。
+/// 手機裡存的東西：上一次的量測數字、照片、簡介、問答紀錄。都在 App 自己的資料夾裡，不上傳。
 final class Storage {
     static let shared = Storage()
 
@@ -9,6 +9,8 @@ final class Storage {
         case measurement = "measurement.json"
         case profile = "profile.json"
         case chat = "chat.json"
+        case photo = "photo.jpg"
+        case photoMarks = "photo.json"
     }
 
     private let directory: URL
@@ -40,11 +42,28 @@ final class Storage {
         try? data.write(to: url(file), options: [.atomic, .completeFileProtection])
     }
 
+    func data(_ file: File) -> Data? {
+        try? Data(contentsOf: url(file))
+    }
+
+    /// 存檔，而且不跟著 iCloud／電腦備份離開這支手機
+    func saveLocalOnly(_ data: Data, to file: File) {
+        try? data.write(to: url(file), options: [.atomic, .completeFileProtection])
+        excludeFromBackup(file)
+    }
+
+    func excludeFromBackup(_ file: File) {
+        var target = url(file)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? target.setResourceValues(values)
+    }
+
     func remove(_ file: File) {
         try? FileManager.default.removeItem(at: url(file))
     }
 
-    /// 「清除所有資料」：報告、簡介、問答紀錄、同意紀錄、開發用的金鑰，全部刪掉
+    /// 「清除所有資料」：報告、照片、簡介、問答紀錄、同意紀錄、開發用的金鑰，全部刪掉
     func eraseAll() {
         File.allCases.forEach(remove)
         UserDefaults.standard.removeObject(forKey: Keys.aiConsent)

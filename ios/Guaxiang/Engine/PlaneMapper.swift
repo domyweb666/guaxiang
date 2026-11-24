@@ -1,7 +1,7 @@
 import Foundation
 
 /// 畫面上的一個位置，x、y 都是 0–1
-struct UV: Equatable {
+struct UV: Codable, Equatable {
     var x: Double
     var y: Double
 }
@@ -92,6 +92,43 @@ enum Outline {
             let tail = points.max(by: { abs($0.x - midX) < abs($1.x - midX) })
         else { return nil }
         return (head, tail)
+    }
+
+    struct Eye {
+        var outer: Pt
+        var inner: Pt
+        var top: Pt
+        var bottom: Pt
+    }
+
+    /// 一隻眼睛：離臉中線最近的是內眼角，最遠的是外眼角；上下眼瞼取兩個眼角正中間那個位置的高度
+    static func eye(_ points: [Pt], midX: Double) -> Eye? {
+        guard points.count >= 4,
+            let inner = points.min(by: { abs($0.x - midX) < abs($1.x - midX) }),
+            let outer = points.max(by: { abs($0.x - midX) < abs($1.x - midX) }),
+            abs(outer.x - inner.x) > 0
+        else { return nil }
+        let line: (Double) -> Double = { x in
+            inner.y + (outer.y - inner.y) * (x - inner.x) / (outer.x - inner.x)
+        }
+        let rest = points.filter { $0 != inner && $0 != outer }
+        let upper = rest.filter { $0.y < line($0.x) } + [inner, outer]
+        let lower = rest.filter { $0.y > line($0.x) } + [inner, outer]
+        let centre = (inner.x + outer.x) / 2
+        guard upper.count > 2, lower.count > 2, let top = height(upper, at: centre),
+            let bottom = height(lower, at: centre)
+        else { return nil }
+        return Eye(outer: outer, inner: inner, top: top, bottom: bottom)
+    }
+
+    /// 把點照左右排成一條折線，取某個 x 的高度
+    private static func height(_ points: [Pt], at x: Double) -> Pt? {
+        let path = points.sorted { $0.x < $1.x }
+        for (a, b) in zip(path, path.dropFirst()) where a.x <= x && b.x >= x && b.x > a.x {
+            let t = (x - a.x) / (b.x - a.x)
+            return Pt(x: x, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t)
+        }
+        return nil
     }
 
     struct Lips {

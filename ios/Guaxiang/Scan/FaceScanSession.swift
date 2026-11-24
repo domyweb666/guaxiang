@@ -4,7 +4,7 @@ import SwiftUI
 import UIKit
 import Vision
 
-/// 掃完之後交出去的東西。照片只留在記憶體裡給「拉髮際線」那一步用，不存檔。
+/// 掃完之後交出去的東西
 struct ScanCapture {
     var frames: [FaceFrame]
     var lights: [Double]
@@ -16,23 +16,16 @@ struct ScanCapture {
 struct BestShot {
     var image: UIImage?
     var frame: FaceFrame
-    /// 眉心、鼻底、下巴在照片上的位置（0–1，左上角是原點）
-    var glabella: UV?
-    var subnasale: UV?
-    var chin: UV?
-}
+    /// 量測點在照片上的位置，拉髮際線和報告最上面的標註用
+    var marks: PhotoMarks
 
-/// 開發工具「頂點對照」用的定格：一張照片，加上每個網格頂點在照片上的位置
-struct MeshSnapshot {
-    var image: UIImage
-    var points: [UV]
-    /// 每個頂點在臉上的左右位置（公尺；負的是本人右邊），指定點位時用來提醒有沒有點錯邊
-    var faceX: [Double]
-    var info: String
+    var glabella: UV? { marks[.glabella] }
+    var subnasale: UV? { marks[.subnasale] }
+    var chin: UV? { marks[.chin] }
 }
 
 /// ARKit 臉部追蹤。每 0.09 秒看一張畫面：合格就收下，收滿 30 張結束。
-/// 相機畫面、網格、深度都只在這裡用，算完特徵點就丟掉，不存檔、不上傳（鐵則 1）。
+/// 相機畫面、網格、深度都只在這裡用，算完特徵點就丟掉。留下來的只有最正的那一張照片，存在這支手機、不上傳（鐵則 1）。
 final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
     @Published var hint = "拿下眼鏡，把臉放進框裡"
     @Published var isGood = false
@@ -42,7 +35,6 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
     /// 掃不了的兩種情況，畫面換成整頁說明（準則 3-32、10-7）
     enum Blocked { case denied, unsupported }
     @Published var blocked: Blocked?
-    @Published var snapshot: MeshSnapshot?
     @Published var debugLine = ""
 
     let view = ARSCNView(frame: .zero)
@@ -52,29 +44,29 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
     private let queue = DispatchQueue(label: "org.domyweb.guaxiang.scan")
     private let ciContext = CIContext()
     private var collecting = false
-    private var wantSnapshot = false
     private var lastTime: TimeInterval = 0
     private var frames: [FaceFrame] = []
     private var lights: [Double] = []
     private var best: BestShot?
     private var bestScore = Double.greatestFiniteMagnitude
-    private var vertexMap = VertexMap()
+    /// 量測點在標準臉上的位置。標準臉每次都一樣，所以整個 app 只找一次
+    private static var standardMap: [LM: MeshPoint]?
+    private var meshMap: [LM: MeshPoint] = [:]
+    private var meshFailure: MeshLocator.Failure?
     private var calibration: VisionCalibration?
     private var calibrationTries = 0
     private var visionHits = 0
 
-    /// - Parameter collect: true 是正式掃描（收 30 張）；false 只開相機，給頂點對照工具定格用
-    func start(collect: Bool) {
-        let map = VertexMap.current()
+    func start() {
         queue.sync {
-            collecting = collect
-            wantSnapshot = false
+            collecting = true
             lastTime = 0
             frames = []
             lights = []
             best = nil
             bestScore = .greatestFiniteMagnitude
-            vertexMap = map
+            meshMap = [:]
+            meshFailure = nil
             calibration = nil
             calibrationTries = 0
             visionHits = 0
@@ -83,7 +75,6 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         finished = nil
         failure = nil
         blocked = nil
-        snapshot = nil
         guard Self.isSupported else {
             blocked = .unsupported
             return
@@ -99,10 +90,6 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
     func stop() {
         view.session.pause()
         queue.async { self.collecting = false }
-    }
-
-    func requestSnapshot() {
-        queue.async { self.wantSnapshot = true }
     }
 
     // MARK: ARSessionDelegate
@@ -174,7 +161,7 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         let eyeL = SIMD3(
             face.leftEyeTransform.columns.3.x, face.leftEyeTransform.columns.3.y, face.leftEyeTransform.columns.3.z)
 
-        if calibration == nil, calibrationTries < 6, verdict == .ok || wantSnapshot {
+        if calibration == nil, calibrationTries < 6, verdict == .ok {
             calibrationTries += 1
             let mouthGuess = (eyeR + eyeL) / 2 + SIMD3<Float>(0, -0.065, 0.02)
             calibration = VisionLandmarks.calibrate(
@@ -182,28 +169,27 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         }
         let display = calibration ?? .fallback
 
-        if wantSnapshot {
-            wantSnapshot = false
-            if let image = makeImage(frame.capturedImage, orientation: display.orientation) {
-                let info =
-                    "頂點 \(vertices.count) 個・畫面 \(Int(resolution.width))×\(Int(resolution.height))・"
-                    + (calibration.map { String(format: "Vision 方向 %d，誤差 %.3f", Int($0.orientation.rawValue), $0.score) }
-                        ?? "Vision 沒對上，照片方向用預設值")
-                let shot = MeshSnapshot(
-                    image: image, points: pixels.map(display.displayPoint), faceX: facePoints.map(\.x), info: info)
-                DispatchQueue.main.async { self.snapshot = shot }
-            }
-        }
-
         guard collecting, verdict == .ok else {
             publish(verdict, debug: debug)
             return
         }
 
-        // 叫得出名字的點：網格的照對照表拿，瞳孔用眼球位置，眉毛和嘴唇用 Vision 從照片上找
+        if meshMap.isEmpty, meshFailure == nil {
+            switch Self.locate(face: face, eyeY: Double(eyeR.y + eyeL.y) / 2) {
+            case .success(let map): meshMap = map
+            case .failure(let reason): meshFailure = reason
+            }
+        }
+
+        // 叫得出名字的點：網格的照形狀找，瞳孔用眼球位置，眉毛、眼睛、嘴唇用 Vision 從照片上找
         var named: FaceFrame = [:]
-        for lm in VertexMap.meshLandmarks {
-            if let index = vertexMap[lm], facePoints.indices.contains(index) { named[lm] = facePoints[index] }
+        var marks = PhotoMarks()
+        let solid = vertices.map { MeshVertex(x: Double($0.x), y: Double($0.y), z: Double($0.z)) }
+        for (lm, point) in meshMap {
+            guard let v = point.place(solid) else { continue }
+            let local = SIMD3<Float>(Float(v.x), Float(v.y), Float(v.z))
+            named[lm] = flat(local)
+            marks[lm] = display.displayPoint(project(local))
         }
         named[.pupilR] = flat(eyeR)
         named[.pupilL] = flat(eyeL)
@@ -226,6 +212,24 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
                 }
                 hit = true
             }
+            for points in [toFace(vision.eyeA), toFace(vision.eyeB)] {
+                guard let eye = Outline.eye(points, midX: midX) else { continue }
+                if eye.inner.x < midX {
+                    named[.eyeOuterR] = eye.outer
+                    named[.eyeInnerR] = eye.inner
+                    named[.eyeTopR] = eye.top
+                    named[.eyeBottomR] = eye.bottom
+                } else {
+                    named[.eyeOuterL] = eye.outer
+                    named[.eyeInnerL] = eye.inner
+                    named[.eyeTopL] = eye.top
+                    named[.eyeBottomL] = eye.bottom
+                }
+            }
+            let onPhoto: ([UV]) -> [UV] = { $0.map { calibration.displayPoint(calibration.toBuffer.apply($0)) } }
+            marks.brows = [onPhoto(vision.browA), onPhoto(vision.browB)]
+            marks.eyes = [onPhoto(vision.eyeA), onPhoto(vision.eyeB)]
+            marks.lips = onPhoto(vision.outerLips)
             if let lips = Outline.lips(outer: toFace(vision.outerLips), inner: toFace(vision.innerLips)) {
                 named[.mouthR] = lips.cornerR
                 named[.mouthL] = lips.cornerL
@@ -243,25 +247,20 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         let score = abs(pose.yaw) + abs(pose.pitch) + abs(pose.roll)
         if score < bestScore {
             bestScore = score
-            let at: (LM) -> UV? = { lm in
-                guard let index = self.vertexMap[lm], pixels.indices.contains(index) else { return nil }
-                return display.displayPoint(pixels[index])
-            }
             best = BestShot(
-                image: makeImage(frame.capturedImage, orientation: display.orientation), frame: named,
-                glabella: at(.glabella), subnasale: at(.subnasale), chin: at(.chin))
+                image: makeImage(frame.capturedImage, orientation: display.orientation), frame: named, marks: marks)
         }
 
         let n = frames.count
         if n >= ScanGate.needFrames, let best {
             collecting = false
             var gaps: [String] = []
-            let missing = vertexMap.missing
-            if !missing.isEmpty {
-                gaps.append("ARKit 頂點對照表還缺 \(missing.count) 個點，用到這些點的項目這次都沒判。")
+            if meshMap.isEmpty {
+                let code = meshFailure.map { "\($0)" } ?? "none"
+                gaps.append("這次在臉上找不到量測點（代號 \(code)），臉形、三停、鼻子都沒判。")
             }
             if visionHits * 2 < n {
-                gaps.append("眉毛和嘴唇的輪廓（Vision）沒有對上，眉毛、印堂、嘴巴相關的項目這次沒判。")
+                gaps.append("照片上的眉毛、眼睛、嘴唇輪廓沒有對上，眉毛、眼睛、印堂、嘴巴這次沒判。")
             }
             let capture = ScanCapture(frames: frames, lights: lights, best: best, gaps: gaps)
             DispatchQueue.main.async {
@@ -278,6 +277,27 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
                 self.debugLine = debug
             }
         }
+    }
+
+    /// 找量測點：優先用 ARKit 的標準臉（沒有表情、左右對稱、每次都一樣），拿不到才用這張臉自己的網格
+    private static func locate(face: ARFaceAnchor, eyeY: Double) -> Result<[LM: MeshPoint], MeshLocator.Failure> {
+        if let standardMap { return .success(standardMap) }
+        let standard: ARFaceGeometry? = ARFaceGeometry(blendShapes: [:])
+        if let standard, standard.vertices.count == face.geometry.vertices.count,
+            case .success(let map) = locate(standard, eyeY: eyeY)
+        {
+            standardMap = map
+            return .success(map)
+        }
+        return locate(face.geometry, eyeY: eyeY)
+    }
+
+    private static func locate(
+        _ geometry: ARFaceGeometry, eyeY: Double
+    ) -> Result<[LM: MeshPoint], MeshLocator.Failure> {
+        MeshLocator.locate(
+            vertices: geometry.vertices.map { MeshVertex(x: Double($0.x), y: Double($0.y), z: Double($0.z)) },
+            triangles: geometry.triangleIndices.map { Int($0) }, eyeY: eyeY)
     }
 
     private func publish(_ verdict: ScanGate.Verdict, debug: String) {
