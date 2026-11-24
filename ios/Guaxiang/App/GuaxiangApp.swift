@@ -292,9 +292,11 @@ struct HomeView: View {
                     }
                 }
                 HStack(spacing: Theme.item) {
-                    stat("五官", "\(r.count(.pass)) 合格", "\(r.count(.fail)) 不合格・\(r.count(.unjudged)) 沒判")
-                    stat("三停", r.santingShort, r.santingLife)
-                    stat("十二宮", "判了 \(r.judgedPalaces) 宮", "\(r.palaces.count - r.judgedPalaces) 宮量不到")
+                    stat(
+                        "五官", "\(r.count(.pass)) 合格",
+                        ["\(r.count(.fail)) 不合格", "\(r.count(.unjudged)) 沒判"])
+                    stat("三停", r.santingShort, [r.santingLife])
+                    stat("十二宮", "判了 \(r.judgedPalaces) 宮", ["\(r.palaces.count - r.judgedPalaces) 宮量不到"])
                 }
             }
             .foregroundStyle(Color.primary)
@@ -307,11 +309,17 @@ struct HomeView: View {
         .buttonStyle(PressStyle())
     }
 
-    private func stat(_ title: String, _ value: String, _ sub: String) -> some View {
+    /// sub 有幾段就用「・」接成一行，放不下就在「・」後面斷
+    private func stat(_ title: String, _ value: String, _ sub: [String]) -> some View {
         VStack(alignment: .leading, spacing: Theme.tight / 2) {
             Text(title).font(.caption).foregroundStyle(Theme.secondary)
             Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
-            Text(sub).font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+            ViewThatFits(in: .horizontal) {
+                Text(sub.joined(separator: "・")).lineLimit(1)
+                Text(sub.joined(separator: "・\n")).fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption)
+            .foregroundStyle(Theme.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.group)
