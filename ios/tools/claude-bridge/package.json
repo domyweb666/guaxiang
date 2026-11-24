@@ -1,0 +1,13 @@
+{
+  "name": "guaxiang-claude-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "開發測試用：讓 iPhone 上的瓜相透過這台電腦的 Claude CLI 回答問古書",
+  "type": "module",
+  "scripts": {
+    "start": "node bridge.mjs"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  }
+}

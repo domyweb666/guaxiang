@@ -98,7 +98,7 @@ struct ScanView: View {
             #if DEVTOOLS
                 Text(session.debugLine).font(.caption2).foregroundStyle(ScanColor.secondary)
             #endif
-            Text("收滿 \(ScanGate.needFrames) 張合格的畫面就好。中途離開 app，回來從頭收。")
+            Text("收滿 \(ScanGate.needFrames) 張清楚的畫面就好。中途離開 app，回來從頭收。")
                 .font(.footnote)
                 .foregroundStyle(ScanColor.secondary)
                 .multilineTextAlignment(.center)
@@ -182,7 +182,7 @@ struct HairlineView: View {
                 VStack(alignment: .leading, spacing: Theme.group) {
                     PageTitle(
                         title: "頭髮從哪裡開始長？",
-                        lead: "相機量不到髮際線。把紅線移到額頭長頭髮的地方，三停才算得出來。", pushed: true)
+                        lead: "相機量不到髮際線。把紅線移到額頭長頭髮的地方，臉的三段才算得出來。", pushed: true)
                     if let image = model.capture?.best.image { photo(image) }
                     HStack(spacing: Theme.item) {
                         Text("拖紅線，或用右邊的按鈕微調").font(.subheadline).foregroundStyle(Theme.secondary)
@@ -197,7 +197,7 @@ struct HairlineView: View {
             BottomBar {
                 Button("就是這裡，看報告") { model.finish(hairRatio: ratio(), hairY: lineY) }
                     .buttonStyle(.primary)
-                Button("我有瀏海，跳過（三停不判）") { model.finish(hairRatio: nil) }
+                Button("我有瀏海，跳過（三段不看）") { model.finish(hairRatio: nil) }
                     .buttonStyle(.textOnly)
             }
         }

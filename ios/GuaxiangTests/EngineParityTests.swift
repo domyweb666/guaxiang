@@ -196,7 +196,7 @@ final class EngineParityTests: XCTestCase {
             for (got, want) in zip(report.officials, c.expected.officials) {
                 XCTAssertEqual(got.official.id, want.id)
                 XCTAssertEqual(got.status.rawValue, want.status, "\(c.name)：\(want.id) 結論")
-                XCTAssertEqual(got.why, want.why, "\(c.name)：\(want.id) 沒判的原因")
+                XCTAssertEqual(got.why, want.why, "\(c.name)：\(want.id) 沒看的原因")
                 XCTAssertEqual(got.rows.count, want.rows.count, "\(c.name)：\(want.id) 條件數")
                 for (row, wantRow) in zip(got.rows, want.rows) {
                     XCTAssertEqual(row.condition.feature, wantRow.feature)
@@ -208,8 +208,8 @@ final class EngineParityTests: XCTestCase {
                 }
             }
 
-            // 符合的古書條文、三停
-            XCTAssertEqual(report.matched.map(\.id), c.expected.rules, "\(c.name)：符合的條文")
+            // 對得上的古書條文、三停
+            XCTAssertEqual(report.matched.map(\.id), c.expected.rules, "\(c.name)：對得上的條文")
             XCTAssertEqual(report.santingRule?.id, c.expected.stRule, "\(c.name)：三停")
             XCTAssertEqual(report.others.map(\.id), c.expected.others, "\(c.name)：其他條文")
             XCTAssertEqual(report.segments?.count, c.expected.seg?.count, "\(c.name)：三段")
@@ -231,6 +231,8 @@ final class EngineParityTests: XCTestCase {
             XCTAssertEqual(wx.weak, c.expected.wx.weak, "\(c.name)：特徵不明顯")
             XCTAssertEqual(wx.relation?.kind, c.expected.wx.relKind, "\(c.name)：主兼關係")
             XCTAssertEqual(wx.relation?.lines ?? [], c.expected.wx.relLines, "\(c.name)：主兼說法")
+            XCTAssertEqual(wx.relation?.plain.count, wx.relation?.lines.count, "\(c.name)：主兼說法的白話")
+            XCTAssertFalse(wx.relation?.plain.contains("") ?? false, "\(c.name)：主兼說法的白話是空的")
 
             // 十二宮
             XCTAssertEqual(report.palaces.count, c.expected.palaces.count)
@@ -243,7 +245,7 @@ final class EngineParityTests: XCTestCase {
             }
 
             // 問古書的依據清單，逐字比
-            let pack = Pack.build(report, profile: fixture.profile.profile, experimentalNote: Pack.webExperimentalNote)
+            let pack = Pack.build(report, profile: fixture.profile.profile)
             XCTAssertEqual(pack.count, c.expected.pack.count, "\(c.name)：依據條數")
             for (got, want) in zip(pack, c.expected.pack) {
                 XCTAssertEqual(got.id, want.id)
@@ -252,11 +254,11 @@ final class EngineParityTests: XCTestCase {
                 XCTAssertEqual(got.text, want.text, "\(c.name)：\(want.id) 內容")
             }
             if let want = c.expected.packNoProfile {
-                let got = Pack.build(report, profile: nil, experimentalNote: Pack.webExperimentalNote)
+                let got = Pack.build(report, profile: nil)
                 XCTAssertEqual(got, want, "\(c.name)：沒填簡介的依據清單")
             }
             if let want = c.expected.request {
-                let history = [Prompt.Exchange(q: "我的五官哪裡最好？", a: "古書說五官管地位和名聲［E3］。")]
+                let history = [Prompt.Exchange(q: "我的五官哪裡最好？", a: "古書說五官管地位和名聲［E3］。", kind: .answer)]
                 let got = Prompt.buildRequest(
                     pack: pack, profile: fixture.profile.profile, question: "我今年運勢怎樣？", history: history)
                 XCTAssertEqual(got.system, want.system, "\(c.name)：提示詞")
@@ -292,7 +294,7 @@ final class EngineParityTests: XCTestCase {
                 id: "E\($0 + 1)", title: "標題" + String(repeating: "長", count: 80),
                 text: String(repeating: "字", count: 1500), key: "")
         }
-        let history = (0..<8).map { Prompt.Exchange(q: "問\($0)", a: String(repeating: "答", count: 1600)) }
+        let history = (0..<8).map { Prompt.Exchange(q: "問\($0)", a: String(repeating: "答", count: 1600), kind: .answer) }
         let long = Prompt.buildRequest(
             pack: pack, profile: Profile(age: 40, intro: String(repeating: "介", count: 500)), question: "問題",
             history: history)

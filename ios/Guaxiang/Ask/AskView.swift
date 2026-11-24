@@ -1,387 +1,507 @@
 import SwiftUI
+import UIKit
 
-/// 問古書：先填簡介，再提問。回答只准引用這份報告，每一句都要標依據；標不出來的會加警告。
+/// 問古書：單純的對話。回答只准引用這份報告，每一句都有依據；跑題和健康的問題顯示寫死的句子。
+/// 兩種用法：報告視窗裡（embedded，導覽列是視窗的）、首頁的 sheet
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss
-    let report: Report
-    /// 放在報告視窗裡：不自己帶導覽列，輸入列縮成一排，跟切換列排在一起。首頁的 sheet 用預設的 false
-    var embedded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let report: Report
+    private let embedded: Bool
+    /// 報告視窗裡現在是不是停在這一格。別的格子疊在上面時，導覽列的按鈕要收起來
+    private let active: Bool
 
-    @State private var loaded = false
+    @StateObject private var chat: AskChat
+    @AppStorage(Storage.Keys.aiConsent) private var consent = false
     @State private var profile = Profile()
-    @State private var ageText = ""
-    @State private var editing = true
-    @State private var consent = UserDefaults.standard.bool(forKey: Storage.Keys.aiConsent)
     @State private var question = ""
-    @State private var entries: [ChatEntry] = []
-    @State private var busy = false
-    @State private var alert: String?
-    @State private var opened: [UUID: String] = [:]
+    @State private var sheet: AskSheet?
+    /// 等使用者同意之後才要送的那一題
+    @State private var pending: Pending?
+    @State private var confirmClear = false
+    @State private var atBottom = true
+    /// 鍵盤出來之前是不是在看最新的一則
+    @State private var pinned = true
     @FocusState private var typing: Bool
 
-    private let storage = Storage.shared
-    private var judge: Judge { Judge(rules: report.rules) }
+    private enum Pending {
+        case ask(String)
+        case retry(UUID)
+    }
+
+    private static let space = "ask.scroll"
+    private static let content = "ask.content"
+
+    init(report: Report, embedded: Bool = false, active: Bool = true) {
+        self.report = report
+        self.embedded = embedded
+        self.active = active
+        _chat = StateObject(wrappedValue: AskChat(report: report))
+    }
 
     var body: some View {
-        Group {
-            if embedded {
+        if embedded {
+            page
+        } else {
+            NavigationStack {
                 page
-            } else {
-                NavigationStack {
-                    page
-                        .navigationTitle("問古書")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarLeading) { Button("回到報告") { dismiss() } }
-                        }
-                }
+                    .navigationTitle("問古書")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) { Button("關閉") { dismiss() } }
+                    }
             }
         }
-        .onAppear(perform: load)
-        .onChange(of: consent) { _, value in UserDefaults.standard.set(value, forKey: Storage.Keys.aiConsent) }
     }
 
     private var page: some View {
-        Page {
-            Text("先填簡介，再問問題。回答只會根據這次量到的結果和古書條文。")
-                .foregroundStyle(Theme.secondary)
-                .padding(.top, 8)
-            liunianCard
-            SectionTitle("簡介")
-            if editing { profileForm } else { profileSummary }
-            Card {
-                CardBlock(divider: false) {
-                    CheckRow(
-                        title: "我同意把簡介、問題和這次量測結果的文字整理，傳給 AI（Anthropic 的 Claude）產生回答",
-                        detail: "照片和臉部座標不會傳出去。", isOn: $consent)
-                }
-            }
-            if !AskClient.isReady {
-                Card {
-                    CardBlock(divider: false) {
-                        Text("問古書還沒開通").font(.headline)
-                        Note("回答要經過一台中繼站，那台還沒架好。架好之前這裡先不能問。")
-                        #if DEVTOOLS
-                            Note("開發測試：到「設定 → 開發工具」貼自己的金鑰就能先試。", warn: true)
-                        #endif
+        conversation
+            .background(Theme.canvas.ignoresSafeArea())
+            .safeAreaInset(edge: .bottom, spacing: 0) { inputBar }
+            .toolbar {
+                if active, !chat.entries.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            confirmClear = true
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                        }
+                        .accessibilityLabel("開新對話")
                     }
                 }
             }
-            SectionTitle("問題")
-            examples
-            ForEach(entries) { entry in answer(entry) }
-            if !entries.isEmpty {
-                Button("清除問答紀錄") {
-                    entries = []
-                    storage.remove(.chat)
+            .alert("要開新對話嗎？", isPresented: $confirmClear) {
+                Button("清掉，開新的", role: .destructive) { chat.clear() }
+                Button("先不用", role: .cancel) {}
+            } message: {
+                Text("這一串問答會清掉，救不回來。")
+            }
+            // 掛在自己身上：在報告視窗裡，掛到外層會被視窗擋住、跳不出來
+            .sheet(item: $sheet, onDismiss: sheetClosed) { which in
+                switch which {
+                case .consent:
+                    AskConsentSheet {
+                        consent = true
+                        sheet = nil
+                    }
+                case .evidence(let evidence):
+                    EvidenceSheet(evidence: evidence)
+                case .profile:
+                    NavigationStack {
+                        ProfileView()
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("完成") { sheet = nil }.fontWeight(.semibold)
+                                }
+                            }
+                    }
+                }
+            }
+            .onAppear(perform: reloadProfile)
+    }
+
+    // MARK: 對話
+
+    private var conversation: some View {
+        GeometryReader { outer in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Group {
+                        if chat.entries.isEmpty {
+                            greeting.frame(maxWidth: .infinity, minHeight: outer.size.height)
+                        } else {
+                            VStack(alignment: .leading, spacing: Theme.section) {
+                                ForEach(chat.entries) { row($0) }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, Theme.group)
+                        }
+                    }
+                    .padding(.horizontal, Theme.screenMargin)
+                    .background(
+                        GeometryReader { inner in
+                            let bottom = inner.frame(in: .named(Self.space)).maxY
+                            Color.clear.onChange(of: bottom <= outer.size.height + Theme.chatSlack, initial: true) {
+                                _, near in atBottom = near
+                            }
+                        }
+                    )
+                    .id(Self.content)
+                }
+                .coordinateSpace(.named(Self.space))
+                .scrollDismissesKeyboard(.interactively)
+                .onAppear { toBottom(proxy, animated: false) }
+                // 自己剛送出：一定捲到最新
+                .onChange(of: chat.entries.count) { toBottom(proxy) }
+                // 回答來了：還在看最新的才跟著捲，往上翻舊的不拉回來
+                .onChange(of: chat.busy) { _, busy in
+                    guard !busy else { return }
+                    if atBottom { toBottom(proxy) }
+                    if active, chat.entries.last?.reply != nil {
+                        AccessibilityNotification.Announcement("回答好了").post()
+                    }
+                }
+                .onChange(of: typing) { _, on in
+                    if on { pinned = atBottom }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    if typing, pinned { toBottom(proxy) }
+                }
+            }
+        }
+    }
+
+    private func toBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        guard !chat.entries.isEmpty else { return }
+        // 等新的一則排好版再捲
+        DispatchQueue.main.async {
+            withAnimation(animated && !reduceMotion ? Theme.change : nil) {
+                proxy.scrollTo(Self.content, anchor: .bottom)
+            }
+        }
+    }
+
+    private var greeting: some View {
+        VStack(spacing: Theme.section) {
+            VStack(spacing: Theme.item) {
+                Text("想問哪裡？").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                Text("古書怎麼說你的臉，直接打就好。")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.secondary)
+            }
+            .multilineTextAlignment(.center)
+            if !AskClient.isReady { notReady }
+            suggestions(4)
+        }
+        .padding(.vertical, Theme.group)
+    }
+
+    private var notReady: some View {
+        VStack(spacing: Theme.tight) {
+            Note("問古書還沒開通，現在還不能問。", warn: true)
+            #if DEVTOOLS
+                Note("開發測試：到設定 → 開發工具，連電腦的 Claude CLI 或貼金鑰。")
+            #endif
+        }
+        .multilineTextAlignment(.center)
+    }
+
+    /// 建議問題：固定清單，點了直接送出
+    private func suggestions(_ count: Int) -> some View {
+        VStack(alignment: .leading, spacing: Theme.item) {
+            ForEach(AskSuggestions.list(report: report, profile: profile).prefix(count), id: \.self) { text in
+                Button {
+                    submit(text)
+                } label: {
+                    Text(text)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.primary)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, Theme.cardPad)
+                        .frame(minHeight: Theme.touch)
+                        .background(Theme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+                }
+                .buttonStyle(PressStyle())
+                .disabled(chat.busy)
+            }
+        }
+    }
+
+    private func row(_ entry: ChatEntry) -> some View {
+        VStack(alignment: .leading, spacing: Theme.group) {
+            HStack(spacing: 0) {
+                Spacer(minLength: Theme.bubbleInset)
+                Text(entry.q)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.cardPad)
+                    .padding(.vertical, Theme.rowPadV)
+                    .background(Theme.accentSoft)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+                    .contentShape(
+                        .contextMenuPreview, RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous)
+                    )
+                    .contextMenu { copyButton(entry.q) }
+                    .accessibilityLabel("你問：\(entry.q)")
+            }
+            if let reply = entry.reply {
+                answer(entry, reply)
+            } else if let error = entry.error {
+                failed(entry, error)
+            } else {
+                Flipping()
+            }
+        }
+    }
+
+    private func answer(_ entry: ChatEntry, _ reply: AskReply) -> some View {
+        let ids = Set(entry.pack.map(\.id))
+        let last = entry.id == chat.entries.last?.id
+        return VStack(alignment: .leading, spacing: Theme.group) {
+            Text(attributed(AskReply.collapsed(reply.pieces(validIDs: ids))))
+                .lineSpacing(Theme.tight)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contextMenu { copyButton(reply.plainText(validIDs: ids)) }
+                .environment(
+                    \.openURL,
+                    OpenURLAction { url in
+                        if let found = entry.pack.first(where: { $0.id == url.lastPathComponent }) {
+                            typing = false
+                            sheet = .evidence(found)
+                        }
+                        return .handled
+                    })
+            if needsBirthday(entry, reply) {
+                Button("去填生日") {
+                    typing = false
+                    sheet = .profile
                 }
                 .buttonStyle(.ghost)
+                Note("流年要知道幾歲才對得上。生日只留在手機，傳出去的只有年紀。")
             }
-        }
-        // 在視窗裡，切換列跟著鍵盤收起來，往下捲就能把鍵盤收掉
-        .scrollDismissesKeyboard(embedded ? .interactively : .automatic)
-        .safeAreaInset(edge: .bottom, spacing: embedded ? 0 : nil) {
-            if embedded { compactBar } else { askBar }
-        }
-        .alert("提示", isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } })) {
-            Button("好") { alert = nil }
-        } message: {
-            Text(alert ?? "")
+            if reply.kind == .offtopic, last { suggestions(3) }
         }
     }
 
-    // MARK: 流年
+    /// 問到今年怎樣，又沒填生日
+    private func needsBirthday(_ entry: ChatEntry, _ reply: AskReply) -> Bool {
+        guard reply.kind == .answer || reply.kind == .nodata else { return false }
+        return profile.currentAge() == nil && LiunianQuestion.matches(entry.q)
+    }
 
-    @ViewBuilder private var liunianCard: some View {
-        if !editing, let ln = judge.liunian(age: profile.age) {
-            Card {
-                CardBlock(divider: false) {
-                    Note("今年的流年・虛歲 \(ln.xu) 歲")
-                    Text(ln.hit?.name ?? "臉的外圈").font(.title3.bold())
-                    if let row = ln.hit {
-                        Text(row.place + (row.layer.isEmpty ? "" : "，屬於\(row.layer)"))
-                    } else {
-                        Text("76 歲以後走到臉的外圈，正面拍不到，這次不判。")
-                    }
-                    Note("古書說一歲對應臉上一個部位。今年就看這裡的形狀和氣色；這個工具只看得到形狀。")
-                }
+    private func failed(_ entry: ChatEntry, _ error: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.tight) {
+            Note(error, warn: true)
+            Button {
+                retry(entry.id)
+            } label: {
+                Label("重試", systemImage: "arrow.clockwise")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(chat.busy ? Theme.secondary : Theme.accent)
+                    .frame(minHeight: Theme.touch)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(PressStyle())
+            .disabled(chat.busy)
         }
     }
 
-    // MARK: 簡介
-
-    private var profileForm: some View {
-        Card {
-            CardBlock(divider: false) {
-                Note("年紀（實歲）")
-                TextField("例如 34", text: $ageText)
-                    .keyboardType(.numberPad)
-                    .padding(10)
-                    .background(Theme.fill)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.fieldRadius))
-            }
-            CardBlock {
-                choice("性別（古書的流年分左右、婚姻那一宮用詞不同）", ["男", "女"], $profile.gender)
-            }
-            CardBlock { choice("感情狀態", ["單身", "交往中", "已婚", "其他"], $profile.relation) }
-            CardBlock {
-                choice("工作類型", ["上班族", "自己創業或接案", "學生", "家管", "退休", "其他"], $profile.work)
-            }
-            CardBlock {
-                Note("想多說一點（選填，最多 400 字）")
-                TextField("例如最近在煩惱什麼、想問哪方面", text: $profile.intro, axis: .vertical)
-                    .lineLimit(3...8)
-                    .padding(10)
-                    .background(Theme.fill)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.fieldRadius))
-                Note("這段只用來挑出跟你的問題有關的古書條文。回答不會把你自己說的事，講成是從臉上看出來的。")
-            }
-            CardBlock {
-                Button("存好簡介", action: saveProfile).buttonStyle(.primary)
-            }
+    private func copyButton(_ text: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+        } label: {
+            Label("複製", systemImage: "doc.on.doc")
         }
     }
 
-    private func choice(_ title: String, _ options: [String], _ value: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: Theme.item) {
-            Note(title)
-            Picker(title, selection: value) {
-                Text("不想說").tag("")
-                ForEach(options, id: \.self) { Text($0).tag($0) }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-        }
-    }
-
-    private var profileSummary: some View {
-        Card {
-            CardBlock(divider: false) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(
-                            ["\(profile.age ?? 0) 歲", profile.gender, profile.relation, profile.work]
-                                .filter { !$0.isEmpty }.joined(separator: "・"))
-                        if !profile.intro.isEmpty { Note(profile.intro) }
-                    }
-                    Spacer()
-                    Button("修改") { editing = true }.font(.subheadline)
-                }
-            }
-        }
-    }
-
-    private func saveProfile() {
-        guard let age = Int(ageText.trimmingCharacters(in: .whitespaces)) else {
-            alert = "請填年紀，流年要用。"
-            return
-        }
-        if age < 18 {
-            alert = "這個工具只給滿 18 歲的人使用。"
-            return
-        }
-        if age > 120 {
-            alert = "年紀好像打錯了。"
-            return
-        }
-        profile.age = age
-        profile.intro = Prompt.clip(profile.intro.trimmingCharacters(in: .whitespacesAndNewlines), Prompt.Limits.intro)
-        storage.save(profile, to: .profile)
-        editing = false
-        typing = false
-    }
-
-    // MARK: 問答
-
-    private var examples: some View {
-        let host = report.wuxing?.host
-        var list = ["古書怎麼看我的財運？", "感情方面古書怎麼說？", "我的五官哪裡最好？"]
-        if profile.age != nil, !editing { list.insert("我今年運勢怎樣？", at: 0) }
-        if let host { list.append("我是\(host)形人是什麼意思？") }
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(list, id: \.self) { text in
-                    Button(text) {
-                        question = text
-                        typing = true
-                    }
-                    .font(.subheadline)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Theme.card)
-                    .foregroundStyle(Color.primary)
-                    .clipShape(Capsule())
-                }
-            }
-        }
-    }
-
-    private func answer(_ entry: ChatEntry) -> some View {
-        let parsed = Citations.parse(entry.a, validIDs: Set(entry.pack.map(\.id)))
-        let shown = opened[entry.id].flatMap { id in entry.pack.first { $0.id == id } }
-        return VStack(alignment: .trailing, spacing: 8) {
-            Text(entry.q)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Theme.accent)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.leading, 48)
-            Card {
-                CardBlock(divider: false) {
-                    Text(attributed(parsed))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .environment(
-                            \.openURL,
-                            OpenURLAction { url in
-                                let id = url.path.replacingOccurrences(of: "/", with: "")
-                                opened[entry.id] = opened[entry.id] == id ? nil : id
-                                return .handled
-                            })
-                    if parsed.used == 0 { Note("這個回答沒有標出依據，請小心看待。", warn: true) }
-                    if parsed.bad { Note("回答裡有引用不存在的依據，已經拿掉。", warn: true) }
-                    if let shown {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(shown.title).font(.subheadline.weight(.semibold))
-                            Text(shown.text).font(.subheadline)
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.fill)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.fieldRadius))
-                    }
-                    Note("點橘色標籤，看這句話根據哪一條。古書的說法沒有經過科學驗證。")
-                }
-            }
-        }
-    }
-
-    private func attributed(_ parsed: ParsedAnswer) -> AttributedString {
+    private func attributed(_ pieces: [AnswerPiece]) -> AttributedString {
         var out = AttributedString()
-        for piece in parsed.pieces {
+        for piece in pieces {
             switch piece {
             case .text(let text):
                 out += AttributedString(text)
             case .cite(let id):
-                var tag = AttributedString(" 依據\(id.dropFirst()) ")
+                // 不斷行空格，標籤不會被拆成兩行
+                var tag = AttributedString("\u{00A0}依據\u{00A0}\(id.dropFirst())\u{00A0}")
                 tag.link = URL(string: "guaxiang-cite:///\(id)")
                 tag.foregroundColor = Theme.accent
-                tag.font = .footnote.weight(.semibold)
+                tag.font = .caption
                 out += tag
             }
         }
         return out
     }
 
-    private var askBar: some View {
-        VStack(spacing: 8) {
-            TextField("想問什麼？例如：我今年運勢怎樣？", text: $question, axis: .vertical)
-                .lineLimit(1...4)
-                .focused($typing)
-                .padding(12)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            Button(busy ? "古書翻閱中…" : "問", action: send)
-                .buttonStyle(.primary)
-                .disabled(!canSend)
-            if let left = Paywall.questionsLeft { Note("還可以問 \(left) 題") }
-        }
-        .padding(.horizontal, Theme.screenMargin)
-        .padding(.vertical, 10)
-        .background(Theme.canvas)
-    }
+    // MARK: 輸入列
 
-    private var canSend: Bool {
-        !busy && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    /// 視窗裡的輸入列：半高時位置少，輸入框和送出鈕排成一排
-    private var compactBar: some View {
+    private var inputBar: some View {
         VStack(alignment: .leading, spacing: Theme.tight) {
             HStack(alignment: .bottom, spacing: Theme.item) {
                 // 位置窄，提示字要短：最大字級配最窄的手機也放得下
                 TextField("想問什麼", text: $question, axis: .vertical)
-                    .lineLimit(1...4)
+                    .lineLimit(1...5)
                     .focused($typing)
                     .padding(.horizontal, Theme.cardPad)
                     .padding(.vertical, Theme.rowPadV)
                     .background(Theme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-                Button(action: send) {
-                    Group {
-                        if busy {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.up").font(.system(size: Theme.touchIcon, weight: .semibold))
-                        }
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+                    .onChange(of: question) { _, text in
+                        let clipped = Prompt.clip(text, Prompt.Limits.question)
+                        if clipped != text { question = clipped }
                     }
-                    .foregroundStyle(canSend ? Theme.onAccent : Theme.secondary)
-                    .frame(width: Theme.touch, height: Theme.touch)
-                    .background(canSend ? Theme.accent : Theme.separator)
-                    .clipShape(Circle())
-                    .contentShape(Circle())
+                Button {
+                    if chat.busy { chat.stop() } else { submit(question) }
+                } label: {
+                    Image(systemName: chat.busy ? "stop.fill" : "arrow.up")
+                        .font(.system(size: Theme.touchIcon, weight: .semibold))
+                        .foregroundStyle(canPress ? Theme.onAccent : Theme.secondary)
+                        .frame(width: Theme.touch, height: Theme.touch)
+                        .background(canPress ? Theme.accent : Theme.separator)
+                        .clipShape(Circle())
+                        .contentShape(Circle())
                 }
                 .buttonStyle(PressStyle())
-                .disabled(!canSend)
-                .accessibilityLabel(busy ? "古書翻閱中" : "問")
+                .disabled(!canPress)
+                .accessibilityLabel(chat.busy ? "停止" : "送出")
             }
+            if (question as NSString).length >= Prompt.Limits.question { Note("最多 300 字。") }
             if let left = Paywall.questionsLeft { Note("還可以問 \(left) 題") }
+            if !typing { Note("古書的說法沒有經過科學驗證。").frame(maxWidth: .infinity) }
         }
         .padding(.horizontal, Theme.screenMargin)
         .padding(.vertical, Theme.item)
         .background(Theme.canvas)
     }
 
-    private func send() {
-        let text = Prompt.clip(question.trimmingCharacters(in: .whitespacesAndNewlines), Prompt.Limits.question)
-        guard !text.isEmpty else { return }
-        guard !editing, profile.age != nil else {
-            alert = "先填簡介並按「存好簡介」。"
-            return
-        }
-        guard consent else {
-            alert = "要先勾選同意，才能把文字傳給 AI。"
-            return
-        }
-        guard AskClient.isReady else {
-            alert = "問古書還沒開通。"
-            return
-        }
-        if let left = Paywall.questionsLeft, left <= 0 {
-            alert = "這份報告附的題數用完了。"
-            return
-        }
-        let pack = Pack.build(report, profile: profile)
-        let history = entries.suffix(3).map { Prompt.Exchange(q: $0.q, a: $0.a) }
-        busy = true
+    private var canPress: Bool {
+        chat.busy || !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: 送出
+
+    private func submit(_ raw: String) {
+        let text = Prompt.clip(raw.trimmingCharacters(in: .whitespacesAndNewlines), Prompt.Limits.question)
+        guard !text.isEmpty, !chat.busy else { return }
+        question = ""
         typing = false
-        Task {
-            defer { busy = false }
-            do {
-                let reply = try await AskClient().ask(pack: pack, profile: profile, question: text, history: history)
-                entries.append(ChatEntry(q: text, a: reply, pack: pack, t: Date()))
-                storage.save(ChatLog(reportWhen: report.measurement.when, entries: entries), to: .chat)
-                Paywall.noteAsked()
-                question = ""
-            } catch {
-                alert = "問不到：\(error.localizedDescription)"
-            }
+        start(.ask(text))
+    }
+
+    private func retry(_ id: UUID) {
+        guard !chat.busy else { return }
+        start(.retry(id))
+    }
+
+    /// 第一次要先同意。還沒開通的直接送，會在原地寫原因，不用先問同意
+    private func start(_ next: Pending) {
+        if AskClient.isReady, !consent {
+            pending = next
+            sheet = .consent
+            return
+        }
+        switch next {
+        case .ask(let text): chat.send(text)
+        case .retry(let id): chat.retry(id)
         }
     }
 
-    private func load() {
-        // 在視窗裡，從推入的頁面回來會再叫一次，不能蓋掉打到一半的簡介
-        guard !loaded else { return }
-        loaded = true
-        if let saved = storage.load(Profile.self, from: .profile) {
-            profile = saved
-            ageText = saved.age.map { String($0) } ?? ""
-            editing = saved.age == nil
+    private func sheetClosed() {
+        reloadProfile()
+        guard let next = pending else { return }
+        pending = nil
+        if consent {
+            start(next)
+        } else if case .ask(let text) = next {
+            // 沒同意：題目放回輸入框，不會不見
+            question = text
         }
-        if let log = storage.load(ChatLog.self, from: .chat), log.reportWhen == report.measurement.when {
-            entries = log.entries
+    }
+
+    private func reloadProfile() {
+        profile = Storage.shared.load(Profile.self, from: .profile) ?? Profile()
+    }
+}
+
+/// 問古書會跳出來的頁
+enum AskSheet: Identifiable {
+    case consent
+    case evidence(Evidence)
+    case profile
+
+    var id: String {
+        switch self {
+        case .consent: return "consent"
+        case .evidence(let e): return "evidence-" + e.id
+        case .profile: return "profile"
         }
+    }
+}
+
+/// 等回答的時候
+private struct Flipping: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: Theme.item) {
+            Image(systemName: "book")
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+                .accessibilityHidden(true)
+            Text("翻書中")
+        }
+        .font(.subheadline)
+        .foregroundStyle(Theme.secondary)
+    }
+}
+
+/// 第一次送出時問一次。設定的「你的資料去了哪裡」可以撤回
+private struct AskConsentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let agree: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.group) {
+                    PageTitle(title: "要傳文字給 AI", lead: "回答由 Anthropic 的 Claude 產生，問之前要你同意。")
+                    Card {
+                        CardBlock(divider: false) {
+                            Text("會傳").font(.headline)
+                            Text("你問的問題、前幾題的問答、你填的簡介（生日只換算成年紀）、這次量測結果的文字整理。")
+                        }
+                        CardBlock {
+                            Text("不會傳").font(.headline)
+                            Text("照片、相機畫面、臉部座標。")
+                        }
+                    }
+                    Note("同意一次就好。之後可以到設定的「你的資料去了哪裡」撤回。").padding(.horizontal, Theme.tight)
+                }
+                .padding(.horizontal, Theme.screenMargin)
+                .padding(.bottom, Theme.section)
+            }
+            BottomBar {
+                Button("同意，送出這一題", action: agree).buttonStyle(.primary)
+                Button("先不要") { dismiss() }.buttonStyle(.textOnly)
+            }
+        }
+        .background(Theme.canvas.ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+/// 點了「依據 3」看那一條
+private struct EvidenceSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let evidence: Evidence
+
+    var body: some View {
+        NavigationStack {
+            Page {
+                Text(evidence.title)
+                    .font(.headline)
+                    .padding(.top, Theme.item)
+                ForEach(Array(evidence.readable.plain.enumerated()), id: \.offset) { _, line in
+                    Text(line).lineSpacing(Theme.tight).textSelection(.enabled)
+                }
+                if !evidence.readable.original.isEmpty {
+                    SectionTitle("古書原文")
+                    ForEach(Array(evidence.readable.original.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(line.hasPrefix("古書：") ? Theme.quote : .footnote)
+                            .foregroundStyle(line.hasPrefix("古書：") ? Color.primary : Theme.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            .navigationTitle("依據 \(String(evidence.id.dropFirst()))")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("關閉") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }

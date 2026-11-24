@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 報告的每一區。五官、三停、十二宮在視窗的切換列上，其他從總覽往右推入
+/// 報告的每一區。五官、三段、十二件事在視窗的切換列上，其他從總覽往右推入
 enum ReportSection: String, Hashable, CaseIterable {
     case wuxing, officials, santing, palaces, others, cannotSee, diagram, numbers
 
@@ -8,9 +8,9 @@ enum ReportSection: String, Hashable, CaseIterable {
         switch self {
         case .wuxing: return "臉形"
         case .officials: return "五官"
-        case .santing: return "三停"
-        case .palaces: return "十二宮"
-        case .others: return "其他古書條文"
+        case .santing: return "三段"
+        case .palaces: return "十二件事"
+        case .others: return "其他古書說法"
         case .cannotSee: return "這次沒看的"
         case .diagram: return "標註圖"
         case .numbers: return "數字明細"
@@ -29,9 +29,9 @@ enum ReportSection: String, Hashable, CaseIterable {
 }
 
 extension Report {
-    /// 三停的短說法，給總覽和首頁那一格
+    /// 三段的短說法，給總覽和首頁那一格
     var santingShort: String {
-        guard let segments, let santingRule else { return "沒判" }
+        guard let segments, let santingRule else { return "沒看" }
         if santingRule.id == "santing-equal" { return "三段差不多長" }
         let longest = segments.max { $0.v < $1.v }
         return "\(longest?.k ?? "")最長"
@@ -41,10 +41,6 @@ extension Report {
         guard let segments, let santingRule else { return "沒拉髮際線" }
         if santingRule.id == "santing-equal" { return "古書說各段平穩" }
         return "管" + (segments.max { $0.v < $1.v }?.life ?? "")
-    }
-
-    var judgedPalaces: Int {
-        palaces.filter { $0.status != .unjudged }.count
     }
 
     var measuredCount: Int {

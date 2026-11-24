@@ -1,14 +1,5 @@
 import Foundation
 
-/// 使用者填的簡介。只存在手機裡；提問時跟著問題一起以文字送出（要先勾同意）。
-struct Profile: Codable, Equatable {
-    var age: Int?
-    var gender = ""
-    var relation = ""
-    var work = ""
-    var intro = ""
-}
-
 /// 依據清單的一條。AI 的每一句話都要標它用了哪一條（E1、E2…）
 struct Evidence: Codable, Equatable, Identifiable {
     let id: String
@@ -20,13 +11,10 @@ struct Evidence: Codable, Equatable, Identifiable {
 /// 把報告整理成編號的依據清單。逐字照網頁版 index.html 的 buildPack()，
 /// 標準答案測試（EngineParityTests）會拿網頁版的輸出逐條比對。
 enum Pack {
-    /// 實驗項目的附註。網頁版寫的是「網頁版量不準」，iOS 版的深度還沒校準，講法不一樣
-    static let webExperimentalNote = "這是實驗項目，網頁版量不準。"
-    static let iosExperimentalNote = "這是實驗項目，深度量測還沒校準，只當參考。"
+    /// 實驗項目的附註，跟網頁版同一句
+    static let experimentalNote = "這是實驗項目，深度還量不準，只當參考。"
 
-    static func build(_ report: Report, profile: Profile?, experimentalNote: String = iosExperimentalNote)
-        -> [Evidence]
-    {
+    static func build(_ report: Report, profile: Profile?) -> [Evidence] {
         let rules = report.rules
         let W = rules.wuxing
         let F = report.measurement.F
@@ -39,10 +27,13 @@ enum Pack {
             return String(format: "%.\(digits)f", value)
         }
 
+        let unseen = rules.cannotSee.map { c -> String in
+            let quote = c.yuanwen.map { "（古書：\($0)，白話：\(c.baihua ?? "")）" } ?? ""
+            return "\(c.plain)（\(c.name)）：\(c.why)" + quote
+        }
         add(
             "這次沒看到的東西",
-            "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看："
-                + rules.cannotSee.map { "\($0.plain)（\($0.name)）：\($0.why)" }.joined(separator: "；")
+            "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看：" + unseen.joined(separator: "；")
                 + "。另外，古書的說法沒有經過科學驗證。",
             "cannot")
 
@@ -54,26 +45,27 @@ enum Pack {
             if wx.weak { text += "，但特徵不明顯" }
             text += "。用比例算哪一形是本工具暫定的算法；五行形本來要看全身和膚色，這裡只是臉形推估。"
             text += "\n古書：\(type.yuanwen)（白話：\(type.plainLine)）"
-            text += "\n\(W.notFaultPlain)"
-            if let rel = wx.relation { text += "\n兼形：" + rel.lines.joined(separator: " ") }
+            text += "\n\(W.notFaultPlain)\n\(W.terms)"
+            if let rel = wx.relation { text += "\n兼形（帶到的那一形）：" + rel.lines.joined(separator: " ") }
             text += "\n出處：\(W.source)"
-            add("臉形：\(wx.host)形人", text, "wuxing")
+            add("臉形：\(wx.host)形人（\(type.plainShape)）", text, "wuxing")
         } else {
-            add("臉形：沒判", "量測資料不足，這次沒有判臉形。", "wuxing")
+            add("臉形：沒看", "這次量到的資料不夠，沒有看臉形。", "wuxing")
         }
 
-        add("五官怎麼算", W.guan + "「十年」只是概數。沒判的不能當成合格。", "guan")
+        add("五官怎麼算", W.guan + W.guanTerms + "「十年」只是概數。沒看的不能當成相符，也不能當成不同。", "guan")
 
         for x in report.officials {
             let o = x.official
             let rows = x.rows.map { row -> String in
                 let pass = row.result.pass == true
-                return (pass ? "符合" : "不符合") + "：" + ((pass ? row.condition.yes : row.condition.no) ?? "")
+                let said = (pass ? row.condition.yes : row.condition.no) ?? ""
+                return "\(pass ? "相符" : "不同")：\(said)（古書的條件：\(row.condition.label ?? "")）"
             }.joined(separator: "；")
-            let verdict = x.status == .pass ? "量得到的條件都合格" : x.status.word
-            var text = "\(o.governs)。\n這次結果：" + (x.status == .unjudged ? "沒判，" + (x.why ?? "") : rows)
+            let verdict = x.status == .pass ? "量得到的條件都相符" : x.status.word
+            var text = "\(o.name)：\(o.governs)。\n這次結果：" + (x.status == .unjudged ? "沒看，" + (x.why ?? "") : rows)
             if let notMeasured = o.notMeasured { text += "\n量不到的：" + notMeasured.joined(separator: "、") }
-            text += "\n古書的合格標準：\(o.baihua)\n出處：\(o.source)"
+            text += "\n古書寫的樣子（白話整理）：\(o.baihua)\n\(o.terms)\n出處：\(o.source)"
             add("五官・\(o.plain)（\(o.name)）：\(verdict)", text, o.id)
         }
 
@@ -81,15 +73,17 @@ enum Pack {
             let parts = segments.map { "\($0.k)（\($0.part)，管\($0.life)）是平均的 \(fixed($0.v, 2)) 倍" }
             add(
                 "臉的三段（三停）：" + (st.id == "santing-equal" ? "差不多長" : "長短不一"),
-                parts.joined(separator: "；") + "。\n古書：\(st.yuanwen ?? "")\n白話：\(st.baihua)\n出處：\(st.source)",
+                parts.joined(separator: "；")
+                    + "。\n古書：\(st.yuanwen ?? "")\n白話：\(st.baihua)\n\(st.terms)\n出處：\(st.source)",
                 "santing")
         } else {
-            add("臉的三段（三停）：沒判", "沒有拉髮際線，量不到臉的上段。", "santing")
+            add("臉的三段（三停）：沒看", "沒有拉髮際線，量不到臉的上段。", "santing")
         }
 
         for r in report.others {
             var text = r.baihua
             if let yuanwen = r.yuanwen, !yuanwen.isEmpty { text += "\n古書：" + yuanwen }
+            text += "\n" + r.terms
             if r.experimental == true { text += "\n" + experimentalNote }
             if let note = r.note, !note.isEmpty { text += "\n" + note }
             text += "\n出處：\(r.source)"
@@ -100,22 +94,24 @@ enum Pack {
             let g = x.palace
             let verdict: String
             switch x.status {
-            case .pass: verdict = "量得到的部分合格"
-            case .fail: verdict = "量得到的部分不合格"
-            case .unjudged: verdict = "沒判"
+            case .pass: verdict = "量得到的部分相符"
+            case .fail: verdict = "量得到的部分不同"
+            case .unjudged: verdict = "沒看"
             }
-            var text = "位置：\(g.place)。\n這次結果：\(x.line)"
+            let placeTerm = g.whereTerm.map { "（古書叫\($0)）" } ?? ""
+            var text = "位置：\(g.place)\(placeTerm)。\n這次結果：\(x.line)"
             if let notMeasured = g.notMeasured, x.status != .unjudged { text += "\n" + notMeasured }
             if let yuanwen = g.yuanwen, !yuanwen.isEmpty { text += "\n古書：\(yuanwen)（白話：\(g.baihua ?? "")）" }
+            if let terms = g.terms { text += "\n" + terms }
             if let note = g.note, !note.isEmpty { text += "\n" + note }
             if let source = g.source, !source.isEmpty { text += "\n出處：" + source }
-            add("十二宮・\(g.topic)（\(g.name)）：\(verdict)", text, "gong-" + g.id)
+            add("十二件事（十二宮）・\(g.topic)（\(g.name)）：\(verdict)", text, "gong-" + g.id)
         }
 
         if let ln = Judge(rules: rules).liunian(age: profile?.age) {
             let snapshot = pack
             let describe: (LiunianRow?) -> String = { row in
-                guard let row else { return "超出〈流年運氣部位歌〉正面路線（76 歲以後在臉的外圈），這次不判" }
+                guard let row else { return "超出〈流年運氣部位歌〉正面路線（76 歲以後在臉的外圈），這次沒看" }
                 var s = "\(row.name)（\(row.place)）"
                 if !row.layer.isEmpty { s += "，屬於" + row.layer }
                 if let link = row.link, let hit = snapshot.first(where: { $0.key == link }) {

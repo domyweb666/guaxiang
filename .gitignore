@@ -3,3 +3,4 @@ ios/*.xcodeproj/
 ios/Guaxiang/Info.plist
 ios/DerivedData/
 .DS_Store
+ios/tools/claude-bridge/node_modules/

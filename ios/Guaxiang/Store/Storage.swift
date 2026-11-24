@@ -63,18 +63,20 @@ final class Storage {
         try? FileManager.default.removeItem(at: url(file))
     }
 
-    /// 「清除所有資料」：報告、照片、簡介、問答紀錄、同意紀錄、開發用的金鑰，全部刪掉
+    /// 「清除所有資料」：報告、照片、簡介、問答紀錄、同意紀錄、開發用的金鑰和電腦連線，全部刪掉
     func eraseAll() {
         File.allCases.forEach(remove)
         UserDefaults.standard.removeObject(forKey: Keys.aiConsent)
         UserDefaults.standard.removeObject(forKey: Keys.questionsAsked)
         Keychain.delete(Keys.devAPIKey)
+        Keychain.delete(Keys.devBridge)
     }
 
     enum Keys {
         static let aiConsent = "ai.consent"
         static let questionsAsked = "ask.count"
         static let devAPIKey = "dev.anthropic.key"
+        static let devBridge = "dev.claude.bridge"
     }
 }
 
@@ -84,15 +86,33 @@ struct ChatLog: Codable {
     var entries: [ChatEntry]
 }
 
-struct ChatEntry: Codable, Identifiable {
+struct ChatEntry: Codable, Identifiable, Equatable {
     var id = UUID()
     var q: String
     var a: String
     var pack: [Evidence]
     var t: Date
+    /// 回答的種類。舊版存的沒有這一格
+    var kind: AskReply.Kind?
+    /// 沒問成的原因。問題留著，可以重試
+    var error: String?
+
+    /// 整理過、可以顯示的回答。還在等、沒問成的是 nil
+    var reply: AskReply? {
+        if let kind { return AskReply(kind: kind, answer: a) }
+        return a.isEmpty ? nil : AskReply(kind: .answer, answer: a)
+    }
+
+    /// 送出去了、還沒回來
+    var waiting: Bool { reply == nil && error == nil }
+
+    /// 給下一題當前情提要的。沒問成的不算
+    var exchange: Prompt.Exchange? {
+        reply.map { Prompt.Exchange(q: q, a: $0.answer, kind: $0.kind) }
+    }
 }
 
-/// 鑰匙圈：只給開發工具存自己貼的金鑰用。正式版走中繼站，app 裡沒有金鑰。
+/// 鑰匙圈：只給開發工具存自己貼的金鑰和電腦連線用。正式版走中繼站，app 裡沒有金鑰。
 enum Keychain {
     private static let service = "org.domyweb.guaxiang"
 

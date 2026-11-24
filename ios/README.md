@@ -26,7 +26,7 @@ SwiftUI 原生。這台 Windows 不能編 Swift，推上 GitHub 後由 Actions �
 | 改了什麼 | 要做什麼 |
 |---|---|
 | `rules.json`、`index.html` 的算法 | `node ios/tools/make-fixtures.mjs`，重產標準答案 |
-| `prompt.js` | 把 `Guaxiang/Engine/Prompt.swift` 改成一樣，跑 `node ios/tools/check-prompt.mjs` 和上面那一行 |
+| `prompt.js` | 把 `Guaxiang/Engine/Prompt.swift` 改成一樣（寫死的句子在 `AskReply.swift`），跑 `node ios/tools/check-prompt.mjs` 和上面那一行，再跑 `node ios/tools/ask-eval/run.mjs` |
 | 圖示 | `python ios/tools/make-icons.py` |
 | 任何 Swift | commit、推功能分支，看 Actions 的 iOS CI |
 
@@ -42,7 +42,7 @@ SwiftUI 原生。這台 Windows 不能編 Swift，推上 GitHub 後由 Actions �
 | 4 | 量測＋規則判讀 | 判讀引擎跟網頁版逐項一致（有測試）。2026-11-24 起量得到，門檻還沒校準 |
 | 5 | 報告畫面 | 2026-11-22 照準則改版：總覽＋一區一頁、朱印古書配色（畫板 https://claude.ai/artifact/9vk3MZVLe7Bdo2kbpuftfU）。首頁就能開範例報告。2026-11-24 改成照片滿版＋下方懸浮視窗（QC-0006 第 3 筆，多米選 A），iOS 26.4 模擬器驗過手勢、深色、最大字級、375 寬，**沒在真機看過**，iOS 17／18 也沒跑過 |
 | 6 | 深度特徵 | 公式照搬、標實驗，還沒校準 |
-| 7 | 問古書 | 畫面和檢查都寫好了。中繼站還沒部署；評測題還沒建 |
+| 7 | 問古書 | 2026-11-24 改成單純對話；防跑題四層、評測 74 題（`tools/ask-eval`，結果看 report.md）。內部測試走電腦的 Claude CLI（`tools/claude-bridge`）。中繼站還沒部署，畫面沒在模擬器和真機看過 |
 | 8 | 付費 | 只有骨架（`Store/Storage.swift` 的 `Paywall`） |
 | 9 | 上架準備 | 還沒開始 |
 

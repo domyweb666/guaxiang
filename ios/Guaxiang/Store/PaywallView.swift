@@ -31,7 +31,7 @@ struct PaywallView: View {
                     }
                     .padding(.horizontal, Theme.tight)
                     Card {
-                        line("三停、十二宮、其他古書條文", divider: false)
+                        line("臉的三段、人生十二件事、其他古書說法", divider: false)
                         line("問古書 \(Paywall.includedQuestions) 題")
                         line("再掃幾次都會出完整報告")
                     }
@@ -62,7 +62,7 @@ struct PaywallView: View {
         VStack(spacing: 0) {
             if divider { RowDivider() }
             HStack(alignment: .firstTextBaseline, spacing: Theme.group) {
-                Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(Theme.accent)
+                Image(systemName: "circle.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityHidden(true)
                 Text(text)
                 Spacer(minLength: 0)
             }
@@ -71,19 +71,22 @@ struct PaywallView: View {
         }
     }
 
-    /// 付錢前先看樣子：十二宮「錢財」那一宮的卡，內容是規則庫的真條文，標明是範例
+    /// 付錢前先看樣子：十二件事「錢財」那張卡，內容是規則庫的真條文，標明是範例
     @ViewBuilder private var sample: some View {
-        if let g = model.rules?.palaces.first(where: { $0.id == "caibo" }), let yuanwen = g.yuanwen {
+        if let rules = model.rules, let g = rules.palaces.first(where: { $0.id == "caibo" }), let baihua = g.baihua {
             Note("付錢前先看樣子（範例）").padding(.top, Theme.section - Theme.group).padding(.horizontal, Theme.tight)
             Card {
                 CardBlock(divider: false) {
                     HStack {
-                        Text("\(g.topic)・\(g.name)").font(.headline)
+                        Text(g.topic).font(.headline)
                         Spacer()
-                        Tag.status(.pass)
+                        VerdictTag(status: .pass)
+                        InfoButton(subject: g.topic) {
+                            BookNote.palace(g, rules: rules, report: nil, result: nil)
+                        }
                     }
-                    Text(yuanwen).font(Theme.quote)
-                    if let source = g.source { Note(source + "・範例只量了鼻樑直不直") }
+                    Text("古書說：" + baihua).fixedSize(horizontal: false, vertical: true)
+                    Note("範例只看了鼻樑直不直。")
                 }
             }
         }

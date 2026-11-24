@@ -9,8 +9,8 @@ enum ReportTab: String, Hashable, CaseIterable {
         switch self {
         case .overview: return "總覽"
         case .officials: return "五官"
-        case .santing: return "三停"
-        case .palaces: return "十二宮"
+        case .santing: return "三段"
+        case .palaces: return "十二件事"
         case .ask: return "問古書"
         }
     }
@@ -81,6 +81,12 @@ struct ReportWindow: View {
             }
         }
         .background(Theme.canvas.ignoresSafeArea())
+        .background(
+            WindowPull(expanded: expanded, onResize: resize)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        )
+        .overlay(alignment: .top) { heightControl }
         .onChange(of: path.isEmpty) { _, empty in pushed = !empty }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             keyboard(true)
@@ -93,6 +99,27 @@ struct ReportWindow: View {
     private var title: String {
         guard tab == .overview else { return tab.title }
         return model.isSample ? "範例報告" : "你的報告"
+    }
+
+    private var expanded: Bool { detent == .large }
+
+    private func resize(_ expand: Bool) {
+        let target: PresentationDetent = expand ? .large : Theme.windowHalf
+        if detent != target { detent = target }
+    }
+
+    /// 旁白用的橫條：點兩下切換，上下滑調整。手指碰不到它，拉和點由 WindowPull 管
+    private var heightControl: some View {
+        Color.clear
+            .frame(width: Theme.windowTapWidth, height: Theme.group)
+            .allowsHitTesting(false)
+            .accessibilityElement()
+            .accessibilityLabel("報告視窗高度")
+            .accessibilityValue(expanded ? "整頁" : "半頁")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { resize(!expanded) }
+            .accessibilityAdjustableAction { direction in resize(direction == .increment) }
+            .accessibilitySortPriority(1)
     }
 
     /// 鍵盤出來：切換列讓位，視窗拉到整頁，不然半高只剩一條縫
@@ -148,7 +175,7 @@ struct ReportWindow: View {
                     .padding(.top, Theme.item)
                 }
             } else {
-                AskView(report: report, embedded: true)
+                AskView(report: report, embedded: true, active: tab == .ask && path.isEmpty)
             }
         }
     }
@@ -197,8 +224,8 @@ struct ReportWindow: View {
 
     private func value(_ s: ReportSection) -> String? {
         switch s {
-        case .wuxing: return report.wuxing.map { "\($0.host)形" } ?? "沒判"
-        case .others: return report.others.isEmpty ? "沒有對到" : "\(report.others.count) 條"
+        case .wuxing: return report.wuxing.map { "\($0.host)形" } ?? "沒看"
+        case .others: return report.others.isEmpty ? "沒有對上" : "\(report.others.count) 條"
         case .cannotSee: return "\(rules.cannotSee.count) 項"
         case .numbers: return "\(report.measuredCount) 項"
         case .officials, .santing, .palaces, .diagram: return nil
@@ -213,7 +240,7 @@ struct ReportWindow: View {
         .buttonStyle(.plain)
     }
 
-    /// 五官、三停、十二宮的摘要格，點了切到那一區
+    /// 五官、三段、十二件事的摘要格，點了切到那一區
     private var cells: some View {
         let layout =
             typeSize.isAccessibilitySize
@@ -221,12 +248,11 @@ struct ReportWindow: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: Theme.item))
         return layout {
             cell(
-                .officials, "\(report.count(.pass)) 合格",
-                ["\(report.count(.fail)) 不合格", "\(report.count(.unjudged)) 沒判"])
+                .officials, VerdictShort.lead(report.officialTally, "項"),
+                VerdictShort.rest(report.officialTally, "項"))
             cell(.santing, report.santingShort, [report.santingLife])
             cell(
-                .palaces, "判了 \(report.judgedPalaces) 宮",
-                ["\(report.palaces.count - report.judgedPalaces) 宮量不到"])
+                .palaces, VerdictShort.lead(report.palaceTally, "件"), VerdictShort.rest(report.palaceTally, "件"))
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -267,8 +293,10 @@ struct ReportWindow: View {
         Card {
             ForEach(Array(report.summaryPoints.enumerated()), id: \.offset) { i, p in
                 CardBlock(divider: i > 0) {
-                    (Text(p.title).bold() + Text(p.body.isEmpty ? "" : "：" + p.body))
-                        .fixedSize(horizontal: false, vertical: true)
+                    PlainLine(subject: p.title, note: { p.note }) {
+                        (Text(p.title).bold() + Text(p.body.isEmpty ? "" : "：" + p.body))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             if !report.unstableNames.isEmpty {
@@ -286,7 +314,7 @@ struct ReportWindow: View {
             CardBlock(divider: false) {
                 Text("這次量不到的").font(.headline)
                 ForEach(m.gaps, id: \.self) { Note($0, warn: true) }
-                Note("量不到的項目一律寫「沒判」，沒有拿別的數字湊。")
+                Note("量不到的項目一律寫「沒看」，沒有拿別的數字湊。")
             }
         }
     }
@@ -327,6 +355,178 @@ struct ReportTabBar: View {
             Rectangle().fill(Theme.separator).frame(height: Theme.hairline).accessibilityHidden(true)
         }
         // 不包成一個有名字的群組：包了之後輔助功能樹只看得到群組，五顆按鈕抓不到
+    }
+}
+
+/// 視窗的橫條和標題列：往上輕拉就到整頁、往下輕拉就回半高，點一下橫條也會換。
+/// 系統自己要拉過一半才換，這裡只補「拉一點點也算」：手指跟著走還是系統的手勢在做，
+/// 放手時系統打算留在原來的高度，才改成換過去。兩邊不會一個要升一個要降。
+struct WindowPull: UIViewControllerRepresentable {
+    let expanded: Bool
+    let onResize: (Bool) -> Void
+
+    func makeUIViewController(context: Context) -> Handle {
+        Handle()
+    }
+
+    func updateUIViewController(_ handle: Handle, context: Context) {
+        handle.expanded = expanded
+        handle.onResize = onResize
+    }
+
+    static func dismantleUIViewController(_ handle: Handle, coordinator: ()) {
+        handle.detach()
+    }
+
+    /// 放手時要不要換高度。travel、velocity 往下是正的；不用換就回 nil，交給系統
+    static func target(expanded: Bool, travel: CGFloat, velocity: CGFloat) -> Bool? {
+        // 往另一個高度的方向算正的
+        let sign: CGFloat = expanded ? 1 : -1
+        let pull = travel * sign, speed = velocity * sign
+        if speed >= Theme.windowFlick { return !expanded }
+        // 拉過去又甩回來的不算
+        if pull >= Theme.windowPull, speed > -Theme.windowFlick { return !expanded }
+        return nil
+    }
+
+    final class Handle: UIViewController, UIGestureRecognizerDelegate {
+        var expanded = false
+        var onResize: (Bool) -> Void = { _ in }
+        private lazy var pan = UIPanGestureRecognizer(target: self, action: #selector(panned))
+        private lazy var tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
+        private weak var sheet: UISheetPresentationController?
+        /// 手勢掛在整個呈現的容器上：它不會動，手指的位置才量得準；橫條也在裡面
+        private weak var host: UIView?
+        /// 視窗裡的導覽列，標題列到哪裡為止看它
+        private weak var bar: UINavigationBar?
+        /// 手指放下時的高度和位置
+        private var panStart: (expanded: Bool, y: CGFloat)?
+        private var tapStart = false
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .clear
+            view.isUserInteractionEnabled = false
+            pan.maximumNumberOfTouches = 1
+            for gesture in [pan, tap] as [UIGestureRecognizer] {
+                // 返回鈕照樣按得到
+                gesture.cancelsTouchesInView = false
+                gesture.delaysTouchesEnded = false
+                gesture.delegate = self
+            }
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            attach()
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            detach()
+        }
+
+        private func attach() {
+            var top: UIViewController = self
+            while let parent = top.parent { top = parent }
+            guard host == nil, top.presentingViewController != nil,
+                let sheet = top.presentationController as? UISheetPresentationController,
+                let container = sheet.containerView
+            else { return }
+            self.sheet = sheet
+            host = container
+            container.addGestureRecognizer(pan)
+            container.addGestureRecognizer(tap)
+        }
+
+        func detach() {
+            host?.removeGestureRecognizer(pan)
+            host?.removeGestureRecognizer(tap)
+            host = nil
+            sheet = nil
+            bar = nil
+            panStart = nil
+        }
+
+        // MARK: UIGestureRecognizerDelegate
+
+        func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let host, let window = sheet?.presentedViewController.view else { return false }
+            let p = touch.location(in: window)
+            guard p.y >= -Theme.item, p.y <= stripHeight(in: window) else { return false }
+            if gesture === tap {
+                guard p.y <= Theme.touch, abs(p.x - window.bounds.midX) <= Theme.windowTapWidth / 2 else { return false }
+                if tap.numberOfTouches == 0 { tapStart = expanded }
+            } else if pan.numberOfTouches == 0 {
+                panStart = (expanded, touch.location(in: host).y)
+            }
+            return true
+        }
+
+        func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+            guard gesture === pan else { return true }
+            // 橫著滑是返回，不管
+            let v = pan.velocity(in: host)
+            return abs(v.y) >= abs(v.x)
+        }
+
+        func gestureRecognizer(
+            _ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+
+        /// 視窗最上面到導覽列底下
+        private func stripHeight(in window: UIView) -> CGFloat {
+            if bar?.window == nil { bar = sheet.flatMap { Self.navigationBar(in: $0.presentedViewController) } }
+            guard let bar, bar.window != nil else { return Theme.windowStrip }
+            return bar.convert(bar.bounds, to: window).maxY
+        }
+
+        private static func navigationBar(in controller: UIViewController) -> UINavigationBar? {
+            if let nav = controller as? UINavigationController { return nav.navigationBar }
+            for child in controller.children {
+                if let found = navigationBar(in: child) { return found }
+            }
+            return nil
+        }
+
+        // MARK: 換高度
+
+        @objc private func panned() {
+            guard pan.state == .ended, let host, let start = panStart else { return }
+            let travel = pan.location(in: host).y - start.y
+            guard
+                let expand = WindowPull.target(
+                    expanded: start.expanded, travel: travel, velocity: pan.velocity(in: host).y)
+            else { return }
+            move(expand, animated: true)
+        }
+
+        @objc private func tapped() {
+            // 系統的橫條點一下也會換高度。目標照手指放下時的高度算，兩邊換到同一個，不會換過去又換回來
+            move(!tapStart, animated: !UIAccessibility.isReduceMotionEnabled)
+        }
+
+        /// 等系統自己的放手處理做完，下一輪再換，不然會被它蓋回去
+        private func move(_ expand: Bool, animated: Bool) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let sheet = self.sheet else { return }
+                // 半高放不下鍵盤
+                if !expand { sheet.presentedViewController.view.endEditing(true) }
+                // 半高的名字是 SwiftUI 取的，從視窗現有的高度裡找，不寫死
+                let id = sheet.detents.map { $0.identifier }.first { ($0 == .large) == expand }
+                if let id, (sheet.selectedDetentIdentifier == .large) != expand {
+                    if animated {
+                        sheet.animateChanges { sheet.selectedDetentIdentifier = id }
+                    } else {
+                        sheet.selectedDetentIdentifier = id
+                    }
+                }
+                // SwiftUI 那邊同一輪跟上。高度已經一樣，它不會再動一次
+                self.onResize(expand)
+            }
+        }
     }
 }
 

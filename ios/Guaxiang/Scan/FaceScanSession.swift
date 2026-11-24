@@ -161,13 +161,22 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         let eyeL = SIMD3(
             face.leftEyeTransform.columns.3.x, face.leftEyeTransform.columns.3.y, face.leftEyeTransform.columns.3.z)
 
-        if calibration == nil, calibrationTries < 6, verdict == .ok {
-            calibrationTries += 1
-            let mouthGuess = (eyeR + eyeL) / 2 + SIMD3<Float>(0, -0.065, 0.02)
-            calibration = VisionLandmarks.calibrate(
-                frame.capturedImage, eyes: [project(eyeR), project(eyeL)], mouth: project(mouthGuess))
+        // 照片的方向每一張都由臉的位置決定，跟 Vision 有沒有對上無關
+        let eyes = [project(eyeR), project(eyeL)]
+        let mouth = project((eyeR + eyeL) / 2 + SIMD3<Float>(0, -0.065, 0.02))
+        let display = VisionLandmarks.upright(eyes: eyes, mouth: mouth, size: resolution)
+        if verdict == .ok {
+            // 掃到一半換了拿手機的方向：換成新的方向重新對
+            if let old = calibration, old.orientation != display.orientation {
+                calibration = nil
+                calibrationTries = 0
+            }
+            if calibration == nil, calibrationTries < 6 {
+                calibrationTries += 1
+                calibration = VisionLandmarks.calibrate(
+                    frame.capturedImage, upright: display, eyes: eyes, mouth: mouth)
+            }
         }
-        let display = calibration ?? .fallback
 
         guard collecting, verdict == .ok else {
             publish(verdict, debug: debug)
@@ -252,17 +261,23 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         }
 
         let n = frames.count
-        if n >= ScanGate.needFrames, let best {
+        if n >= ScanGate.needFrames, var shot = best {
             collecting = false
+            // 保險：照片跟標註對不上方向就轉正，免得拿躺著的照片拉髮際線
+            if let image = shot.image {
+                let photo = FacePhoto(image: image, marks: shot.marks).upright()
+                shot.image = photo.image
+                shot.marks = photo.marks
+            }
             var gaps: [String] = []
             if meshMap.isEmpty {
                 let code = meshFailure.map { "\($0)" } ?? "none"
-                gaps.append("這次在臉上找不到量測點（代號 \(code)），臉形、三停、鼻子都沒判。")
+                gaps.append("這次在臉上找不到量測點（代號 \(code)），臉形、臉的三段、鼻子都沒看。")
             }
             if visionHits * 2 < n {
-                gaps.append("照片上的眉毛、眼睛、嘴唇輪廓沒有對上，眉毛、眼睛、印堂、嘴巴這次沒判。")
+                gaps.append("照片上的眉毛、眼睛、嘴唇輪廓沒有對上，眉毛、眼睛、兩眉中間、嘴巴這次沒看。")
             }
-            let capture = ScanCapture(frames: frames, lights: lights, best: best, gaps: gaps)
+            let capture = ScanCapture(frames: frames, lights: lights, best: shot, gaps: gaps)
             DispatchQueue.main.async {
                 self.view.session.pause()
                 self.count = n

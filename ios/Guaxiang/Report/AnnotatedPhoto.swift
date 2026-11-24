@@ -74,15 +74,15 @@ struct AnnotatedPhoto: View {
     private var label: String {
         switch mode {
         case .overview:
-            return photo.marks.hairY == nil ? "你的照片，標出五官和三停下面兩段的分界" : "你的照片，標出五官和三停的分界"
+            return photo.marks.hairY == nil ? "你的照片，標出五官，和臉的中段、下段的分界" : "你的照片，標出五官和臉的三段分界"
         case .officials:
             return "你的照片，標出眉、眼、鼻、嘴"
         case .santing:
-            return photo.marks.hairY == nil ? "你的照片，標出三停下面兩段的分界" : "你的照片，標出三停的分界"
+            return photo.marks.hairY == nil ? "你的照片，標出臉的中段、下段的分界" : "你的照片，標出臉的三段分界"
         case .palaces:
             let judged = palaces.filter { $0.status != .unjudged && !MarkLayer.noSpot.contains($0.id) }
-            guard !judged.isEmpty else { return "你的照片，十二宮這次都沒判" }
-            return "你的照片，標出判得到的宮：" + judged.map(\.palace.name).joined(separator: "、")
+            guard !judged.isEmpty else { return "你的照片，十二件事這次都沒看" }
+            return "你的照片，標出看得到的幾件事：" + judged.map(\.palace.topic).joined(separator: "、")
         }
     }
 
@@ -92,7 +92,7 @@ struct AnnotatedPhoto: View {
             key("眼", Theme.markEye)
             key("鼻", Theme.markNose)
             key("嘴", Theme.markMouth)
-            key("三停分界", Theme.markLine)
+            key("三段分界", Theme.markLine)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.cardPad)
@@ -263,9 +263,9 @@ private struct MarkLayer: View {
             guard let y = line.y else { continue }
             divider(context, y: place(UV(x: 0, y: y), size).y, width: size.width, name: line.name)
         }
-        // 兩條線之間寫是哪一停
+        // 兩條線之間寫是哪一段
         let segments: [(name: String, top: Double?, bottom: Double?)] = [
-            ("上停", hair, brow), ("中停", brow, nose), ("下停", nose, chin)
+            ("上段", hair, brow), ("中段", brow, nose), ("下段", nose, chin)
         ]
         for s in segments {
             guard let top = s.top, let bottom = s.bottom else { continue }
@@ -287,13 +287,13 @@ private struct MarkLayer: View {
 
     // MARK: 十二宮
 
-    /// 判得到的宮畫朱紅小標籤寫宮名，其他宮畫白色小圓點
+    /// 看得到的畫朱紅小標籤寫是哪一件事，其他畫白色小圓點
     private func drawPalaces(_ context: GraphicsContext, _ size: CGSize) {
         var all: [PalaceMark] = []
         for x in palaces {
             let spots = palaceSpots(x.id, size).sorted { $0.x < $1.x }
             guard !spots.isEmpty else { continue }
-            all.append(PalaceMark(name: x.status == .unjudged ? nil : x.palace.name, spots: spots))
+            all.append(PalaceMark(name: x.status == .unjudged ? nil : x.palace.topic, spots: spots))
         }
         let face = featureBoxes(size)
         var taken: [CGRect] = []
@@ -320,7 +320,7 @@ private struct MarkLayer: View {
         }
     }
 
-    /// 一宮：沒判的沒有名字。位置由左到右排
+    /// 一宮：沒看的沒有名字。位置由左到右排
     private struct PalaceMark {
         let name: String?
         let spots: [CGPoint]

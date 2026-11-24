@@ -10,6 +10,7 @@ struct Rules: Decodable {
     let wuxing: Wuxing
     let cannotSee: [CannotSee]
     let palacesNote: String
+    let palacesTerms: String
     let palaces: [Palace]
     let liunian: Liunian
 
@@ -29,15 +30,20 @@ struct Rules: Decodable {
     }
 }
 
+/// name、formula 給開發核對用（有點位編號），畫面上只用 plainName、plainFormula
 struct FeatureDef: Decodable {
     let name: String
     let formula: String
     let unit: String
+    let plainName: String
+    let plainFormula: String
 }
 
 struct Threshold: Decodable {
     let value: Double
     let note: String
+    /// 這條線為什麼畫在這裡，白話
+    let plain: String
 }
 
 /// 一個條件：哪個特徵、怎麼比、門檻是哪一個（或直接給數字）。十二宮的 measure 也是這個形狀
@@ -47,6 +53,8 @@ struct Condition: Decodable {
     let th: String?
     let value: Double?
     let label: String?
+    /// 這一條在看什麼，白話（例如「鼻樑直不直」）
+    let plain: String?
     let yes: String?
     let no: String?
     let type: String?
@@ -63,6 +71,9 @@ struct Official: Decodable, Identifiable {
     let baihua: String
     let source: String
     let lit: String
+    let litPlain: String
+    /// 古書裡這個部位叫什麼
+    let terms: String
     let plain: String
     let governs: String
 }
@@ -74,9 +85,14 @@ struct Rule: Decodable, Identifiable {
     let needHairline: Bool?
     let experimental: Bool?
     let yuanwen: String?
+    /// 原文逐句的白話
+    let yuanwenPlain: String?
     let source: String
     let baihua: String
     let lit: String
+    let litPlain: String
+    /// 這一條用到的古書叫法
+    let terms: String
     let headline: String?
     let note: String?
 }
@@ -105,11 +121,15 @@ struct Wuxing: Decodable {
     let summary: String
     let notFault: String
     let source: String
+    let terms: String
     let sheng: [String: String]
     let ke: [String: String]
     let keRule: [String: String]
+    /// 兩種形放在一起的說法，白話
+    let keRulePlain: [String: String]
     let notFaultPlain: String
     let guan: String
+    let guanTerms: String
 }
 
 struct WuxingType: Decodable {
@@ -123,6 +143,8 @@ struct CannotSee: Decodable {
     let name: String
     let why: String
     let plain: String
+    let yuanwen: String?
+    let baihua: String?
 }
 
 struct Palace: Decodable, Identifiable {
@@ -131,6 +153,9 @@ struct Palace: Decodable, Identifiable {
     let name: String
     let modern: String?
     let place: String
+    /// 這個位置古書叫什麼
+    let whereTerm: String?
+    let terms: String?
     let yuanwen: String?
     let baihua: String?
     let measure: Condition?
@@ -138,10 +163,12 @@ struct Palace: Decodable, Identifiable {
     let notMeasured: String?
     let why: String?
     let note: String?
+    let noQuoteWhy: String?
     let source: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, topic, name, modern, yuanwen, baihua, measure, blockedBy, notMeasured, why, note, source
+        case id, topic, name, modern, whereTerm, terms, yuanwen, baihua, measure, blockedBy, notMeasured, why, note
+        case noQuoteWhy, source
         case place = "where"
     }
 }
@@ -163,5 +190,15 @@ struct LiunianRow: Decodable {
     private enum CodingKeys: String, CodingKey {
         case from, to, name, layer, link
         case place = "where"
+    }
+
+    /// layer 的白話：「兄弟宮（兄弟朋友）、保壽官（眉毛）」→「兄弟朋友、眉毛」
+    var plainLayer: String {
+        layer.components(separatedBy: "、").compactMap { item -> String? in
+            guard let open = item.firstIndex(of: "（"), let close = item.lastIndex(of: "）"), open < close else {
+                return nil
+            }
+            return String(item[item.index(after: open)..<close])
+        }.joined(separator: "、")
     }
 }

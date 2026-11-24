@@ -24,6 +24,7 @@ struct SettingsView: View {
     @State private var confirmEraseAgain = false
     @State private var showPaywall = false
     @State private var toast: String?
+    @State private var filled = 0
 
     private let config = VeggieConfig.app
 
@@ -38,6 +39,15 @@ struct SettingsView: View {
         NavigationStack {
             Page {
                 PageTitle(title: "設定", pushed: true)
+                group("關於你") {
+                    NavigationLink {
+                        ProfileView()
+                    } label: {
+                        VeggieRow(
+                            icon: "person", title: "簡介", value: filled == 0 ? "還沒填" : "填了 \(filled) 項", accessory: .push)
+                    }
+                }
+
                 group(nil) {
                     NavigationLink {
                         PrivacyNoteView()
@@ -109,7 +119,7 @@ struct SettingsView: View {
                         NavigationLink {
                             DevToolsView()
                         } label: {
-                            VeggieRow(icon: "wrench.and.screwdriver", title: "範例報告、金鑰", accessory: .push)
+                            VeggieRow(icon: "wrench.and.screwdriver", title: "範例報告、連電腦、金鑰", accessory: .push)
                         }
                     }
                 #endif
@@ -120,6 +130,8 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .veggieStyle(style)
+            // 從簡介頁回來也會叫到
+            .onAppear { filled = Storage.shared.load(Profile.self, from: .profile)?.filledCount ?? 0 }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.fontWeight(.semibold) }
@@ -173,6 +185,8 @@ struct SettingsView: View {
 
 /// 你的資料去了哪裡。上架時的隱私權政策會照這一頁的內容寫（HANDOFF 第九節）
 struct PrivacyNoteView: View {
+    @AppStorage(Storage.Keys.aiConsent) private var consent = false
+
     var body: some View {
         Page {
             PageTitle(title: "你的資料去了哪裡", pushed: true)
@@ -183,11 +197,17 @@ struct PrivacyNoteView: View {
                 }
                 CardBlock {
                     Text("存在手機裡的").font(.headline)
-                    Text("上一次的照片和標註位置、量測數字、你填的簡介、問答紀錄。照片鎖機的時候讀不到，也不會跟著 iCloud 備份走。按「清除所有資料」會全部刪掉。")
+                    Text("上一次的照片和標註位置、量測數字、你填的簡介（含生日）、問答紀錄。照片鎖機的時候讀不到，也不會跟著 iCloud 備份走。按「清除所有資料」會全部刪掉。")
                 }
                 CardBlock {
                     Text("會離開手機的").font(.headline)
-                    Text("只有「問古書」：你勾了同意、按下送出之後，簡介、問題和這次量測結果的文字整理會傳給 AI（Anthropic 的 Claude）產生回答。照片和臉部座標不在裡面。")
+                    Text("只有「問古書」：你同意、按下送出之後，問題、前幾題的問答、簡介和這次量測結果的文字整理會傳給 AI（Anthropic 的 Claude）產生回答。生日只換算成年紀。照片和臉部座標不在裡面。")
+                    if consent {
+                        Button("撤回同意") { consent = false }.buttonStyle(.ghost)
+                        Note("撤回之後，下次問古書會再問你一次。已經傳出去的收不回來。")
+                    } else {
+                        Note("你現在沒有同意，什麼都不會傳出去。第一次問古書的時候會問你。")
+                    }
                 }
                 CardBlock {
                     Text("不做的事").font(.headline)

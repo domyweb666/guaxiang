@@ -14,10 +14,7 @@ enum Theme {
     /// 壓在主色上的字
     static let onAccent = dynamic(0xFFFFFF, 0x2A0E0A)
     static let accentSoft = dynamic(0xF6E4DF, 0x3A1E1B)
-    /// 合格：綠
-    static let ok = dynamic(0x2F6B4F, 0x9DC2A5)
-    static let okSoft = dynamic(0xE3ECE5, 0x22322A)
-    /// 不合格：琥珀。刻意不用紅，避免跟主色混在一起
+    /// 提醒：琥珀（不穩、實驗、完整版的鎖）。不用紅，避免跟主色混在一起；判讀結果不用這個色
     static let bad = dynamic(0x7A4B00, 0xE9C46A)
     static let badSoft = dynamic(0xF6EBD5, 0x3A2F17)
     /// 會刪東西的動作
@@ -42,12 +39,14 @@ enum Theme {
     static let markLine = fixed(0xFFB224)
     /// 壓在 markLine 上的字
     static let markLineText = fixed(0x2A1A00)
-    /// 十二宮判得到的那幾宮（跟淺色主色同一個朱紅，白字 5.9:1）
+    /// 十二件事裡看得到的那幾件（跟淺色主色同一個朱紅，白字 5.9:1）
     static let markPalace = fixed(0xB33A2B)
     /// 照片上小標籤的深色底
     static let markShade = Color.black.opacity(0.55)
     static let markWidth: CGFloat = 2
     static let markDot: CGFloat = 10
+    /// 「沒看」那個虛線圈的虛線
+    static let verdictDash: [CGFloat] = [2, 2]
     /// 照片上小標籤的字。跟著系統字級放大，到上限為止，不然會蓋住五官
     static let markText: CGFloat = 12
     static let markTextMax: CGFloat = 14
@@ -84,12 +83,28 @@ enum Theme {
     static let hairline: CGFloat = 1
     static let sketchWidth: CGFloat = 180
 
+    // MARK: 問古書的對話
+
+    static let bubbleRadius: CGFloat = 20
+    /// 問題的泡泡左邊至少空這麼多，看得出是自己說的
+    static let bubbleInset: CGFloat = 48
+    /// 離最底下這麼近就當作在看最新的一則，新的來了才跟著捲
+    static let chatSlack: CGFloat = 80
+    static let wheelHeight: CGFloat = 180
+
     // MARK: 報告的懸浮視窗
 
     /// 半高：約佔下半
     static let windowFraction: CGFloat = 0.5
     static let windowHalf = PresentationDetent.fraction(windowFraction)
     static let windowRadius: CGFloat = 36
+    /// 在橫條和標題列上拉這麼多就換高度，或放手時有這個速度（每秒幾點）
+    static let windowPull: CGFloat = 12
+    static let windowFlick: CGFloat = 150
+    /// 點一下會換高度的範圍有多寬（橫條在正中間）
+    static let windowTapWidth: CGFloat = 120
+    /// 找不到導覽列時，橫條加標題列當作這麼高
+    static let windowStrip: CGFloat = 64
     /// 照片本身至少要鋪到視窗上緣以下這麼多，圓角兩旁才是真的照片。再往下照片不夠長就用最後一排顏色接到螢幕底
     static let windowOverlap: CGFloat = 64
     /// 照片最上面那層淡底，返回鈕和狀態列才看得清楚
@@ -193,19 +208,11 @@ struct Note: View {
     }
 }
 
-/// 合格／不合格／沒判／實驗 的小標籤
+/// 小標籤（實驗）。判讀結果的標籤在 Report/VerdictView.swift
 struct Tag: View {
     let text: String
     let color: Color
     var background: Color?
-
-    static func status(_ s: Status) -> Tag {
-        switch s {
-        case .pass: return Tag(text: "合格", color: Theme.ok, background: Theme.okSoft)
-        case .fail: return Tag(text: "不合格", color: Theme.bad, background: Theme.badSoft)
-        case .unjudged: return Tag(text: "沒判", color: Theme.secondary, background: Theme.fill)
-        }
-    }
 
     var body: some View {
         Text(text)
@@ -394,7 +401,7 @@ struct CheckRow: View {
     }
 }
 
-/// 首頁和範例用的臉部示意圖：一張臉的輪廓，加三停的四條分界線
+/// 首頁和範例用的臉部示意圖：一張臉的輪廓，加三段的四條分界線
 struct FaceSketch: View {
     var body: some View {
         Canvas { context, size in

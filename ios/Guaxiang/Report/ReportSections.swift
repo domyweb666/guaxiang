@@ -13,7 +13,8 @@ struct ReportSectionView: View {
 }
 
 /// 一區的內容，不含外框。切換列那幾區直接放這個，推入頁也用這個。
-/// 內容和白話用語照網頁版，只是從一條長捲軸拆開
+/// 正面只放白話；古書原文、術語、數字都在旁邊的小圓鈕裡（BookNote）。
+/// 判讀結果的樣子只呼叫 VerdictView.swift，這裡不畫
 struct ReportSectionContent: View {
     @EnvironmentObject private var model: AppModel
     let section: ReportSection
@@ -56,115 +57,130 @@ struct ReportSectionContent: View {
     private var lead: String? {
         switch section {
         case .wuxing: return "古書把人分成金、木、水、火、土五種形。"
-        case .officials: return "古書把耳、眉、眼、鼻、口叫五官。每一官的條件全部符合才算合格。"
+        case .officials: return "古書寫了耳、眉、眼、鼻、嘴各長什麼樣，這裡拿你的臉去比。"
         case .santing: return "古書把臉從上到下分成三段，各管人生的一段時間。"
         case .palaces: return rules.palacesNote
-        case .others: return "這次量測對得上的其他古書條文。"
+        case .others: return "這次對得上的其他古書說法。"
         case .cannotSee: return "算命先生當面會看、相機拍不到的。"
         case .diagram: return "量測用到的位置。照片只存在這支手機。"
-        case .numbers: return "給想核對算法的人。"
+        case .numbers: return "每一項量出來的數字。怎麼算的、用在哪裡，按旁邊的小圓鈕看。"
         }
     }
 
     // MARK: 臉形
 
     @ViewBuilder private var wuxingSection: some View {
-        let W = rules.wuxing
-        if let wx = report.wuxing, let type = W.types[wx.host] {
+        if let wx = report.wuxing, let type = rules.wuxing.types[wx.host] {
             Card {
-                CardBlock(divider: false) {
-                    VStack(spacing: Theme.item) {
-                        Text(wx.host)
-                            .font(Theme.mark)
-                            .foregroundStyle(Theme.accent)
-                            .frame(width: Theme.markSize, height: Theme.markSize)
-                            .background(Theme.accentSoft)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.innerRadius, style: .continuous))
-                            .accessibilityHidden(true)
-                        Text("\(wx.host)形人").font(.title.bold())
-                        Note(
-                            (wx.guest.map { "也帶一點\($0)形" } ?? "沒有明顯帶別的形")
-                                + (wx.weak ? "・特徵不明顯，接近中間型" : ""))
-                        Text(type.yuanwen).font(Theme.quote).multilineTextAlignment(.center).padding(.top, Theme.item)
-                        Text(type.plainLine).multilineTextAlignment(.center)
-                        Note(W.source)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                wuxingHead(wx, type)
                 CardBlock {
                     Note("怎麼看出來的")
-                    Text((report.wuxingWhy ?? "") + "五形裡最接近\(wx.host)形（\(type.plainShape)）。")
-                    Note("古書只說「金方、木瘦、水圓、火尖、土厚」，沒有給數字。用多少比例算哪一形，是本工具暫定的算法。")
+                    Text((report.wuxingWhy ?? "") + "五形裡最接近\(wx.host)形。")
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if let rel = wx.relation, let guest = wx.guest {
                     CardBlock {
-                        Note("你主要是\(wx.host)形，也帶一點\(guest)形：\(report.wuxingRelationPlain ?? "")")
-                        ForEach(rel.lines, id: \.self) { Text($0) }
-                        if rel.kind.contains("剋") { Note("兩本古書對這一組的看法剛好相反，所以兩種都列出來。") }
+                        PlainLine(subject: "兩種形放在一起", note: { report.relationNote }) {
+                            Note("你也帶一點\(guest)形，古書對這樣的搭配怎麼說")
+                            ForEach(rel.plain, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+                            if rel.kind.contains("剋") { Note("兩本古書的看法相反，所以兩種都列出來。") }
+                        }
                     }
                 }
                 CardBlock {
-                    Note(W.notFaultPlain + "\n另外，五行形本來要看全身和膚色，這裡只看臉形，所以只是推估。")
+                    Note(rules.wuxing.notFaultPlain)
+                    Note("古書分這五種形要看全身和膚色，這次只看臉，所以是推估。")
                 }
             }
         } else {
-            Card { CardBlock(divider: false) { Note("量測資料不足，這次沒判臉形。") } }
+            Card {
+                CardBlock(divider: false) {
+                    PlainLine(subject: "臉形", note: { report.wuxingNote }) { Note("這次量到的資料不夠，沒看臉形。") }
+                }
+            }
         }
+    }
+
+    private func wuxingHead(_ wx: WuxingResult, _ type: WuxingType) -> some View {
+        CardBlock(divider: false) {
+            VStack(spacing: Theme.item) {
+                Text(wx.host)
+                    .font(Theme.mark)
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: Theme.markSize, height: Theme.markSize)
+                    .background(Theme.accentSoft)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.innerRadius, style: .continuous))
+                    .accessibilityHidden(true)
+                Text("\(wx.host)形・\(type.plainShape)")
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
+                Note(wuxingSide(wx)).multilineTextAlignment(.center)
+                Text("古書說：\(type.plainLine)")
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Theme.item)
+            }
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .topTrailing) {
+                InfoButton(subject: "臉形") { report.wuxingNote }
+                    .padding(.top, -Theme.group)
+            }
+        }
+    }
+
+    private func wuxingSide(_ wx: WuxingResult) -> String {
+        var text = wx.guest.map { "也帶一點\($0)形" } ?? "沒有明顯帶別的形"
+        if wx.weak { text += "・特徵不明顯，接近中間型" }
+        return text
     }
 
     // MARK: 五官
 
     @ViewBuilder private var officialsSection: some View {
         VStack(alignment: .leading, spacing: Theme.item) {
-            StatusBar(pass: report.count(.pass), fail: report.count(.fail), unjudged: report.count(.unjudged))
-            Text("\(report.count(.pass)) 合格・\(report.count(.fail)) 不合格・\(report.count(.unjudged)) 沒判")
-                .font(.headline)
-            Text(rules.wuxing.guan).font(.subheadline)
-            Note("「沒判」的不能當成合格來算；「十年」也只是概數。")
+            VerdictSummary(tally: report.officialTally, unit: "項")
+            PlainLine(subject: "五官", note: { report.officialsNote }) {
+                Text(rules.wuxing.guan).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            }
+            Note("沒看的不算相符，也不算不同。「十年」只是概數。")
         }
         .padding(.horizontal, Theme.tight)
-        ForEach(report.officials) { x in
-            Card {
-                CardBlock(divider: false) {
-                    HStack(alignment: .firstTextBaseline, spacing: Theme.item) {
-                        if let color = markColor(x.official.id) {
-                            // 跟照片上那一圈同一個顏色
-                            Circle().fill(color).frame(width: Theme.markDot, height: Theme.markDot).accessibilityHidden(true)
-                        }
-                        (Text(x.official.plain).font(.title3.weight(.semibold))
-                            + Text("・" + x.official.name).font(.subheadline).foregroundColor(Theme.secondary))
-                        Spacer()
-                        Tag.status(x.status)
+        ForEach(report.officials) { x in officialCard(x) }
+    }
+
+    private func officialCard(_ x: OfficialResult) -> some View {
+        Card {
+            CardBlock(divider: false) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.item) {
+                    if let color = markColor(x.official.id) {
+                        // 跟照片上那一圈同一個顏色
+                        Circle().fill(color).frame(width: Theme.markDot, height: Theme.markDot).accessibilityHidden(true)
                     }
-                    Note(x.official.governs)
-                    if x.status == .unjudged {
-                        Text(x.why ?? "")
-                        Note("不判的不算合格，也不算不合格。")
-                    }
-                    ForEach(Array(x.rows.enumerated()), id: \.offset) { _, row in rowLine(row) }
+                    Text(x.official.plain).font(.title3.weight(.semibold))
+                    Spacer()
+                    VerdictTag(status: x.status)
                 }
-                CardBlock {
-                    Note("古書的合格標準（白話整理）")
-                    Text(x.official.baihua)
-                    Note("\(x.official.source)・文獻 \(x.official.lit)")
+                Note("古書說：" + x.official.governs)
+                if x.status == .unjudged {
+                    Text(x.why ?? "").fixedSize(horizontal: false, vertical: true)
+                    Note("沒看的不算相符，也不算不同。")
                 }
-                if let notMeasured = x.official.notMeasured, !notMeasured.isEmpty {
-                    CardBlock {
-                        DisclosureGroup("這一官還有 \(notMeasured.count) 條量不到") {
-                            Text(
-                                notMeasured.joined(separator: "、") + "。"
-                                    + (x.status == .pass ? "所以這裡的合格，只代表量得到的幾條合格。" : "")
-                            )
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, Theme.item)
-                        }
-                        .font(.subheadline.weight(.semibold))
-                    }
+                ForEach(Array(x.rows.enumerated()), id: \.offset) { _, row in rowLine(row, of: x) }
+            }
+            CardBlock {
+                PlainLine(subject: x.official.plain, note: { report.note(official: x) }) {
+                    Note("古書寫的樣子")
+                    Text(x.official.baihua).fixedSize(horizontal: false, vertical: true)
+                    if let rest = notMeasuredLine(x) { Note(rest) }
                 }
             }
         }
+    }
+
+    private func notMeasuredLine(_ x: OfficialResult) -> String? {
+        let count = x.official.notMeasured?.count ?? 0
+        guard count > 0 else { return nil }
+        return "古書還看 \(count) 處，這次沒看。" + (x.status == .pass ? "這裡的「相符」只包含看得到的幾條。" : "")
     }
 
     /// 這一官在照片上是什麼顏色。沒有照片、耳朵沒有標註，就不放色點
@@ -179,137 +195,122 @@ struct ReportSectionContent: View {
         }
     }
 
-    @ViewBuilder private func rowLine(_ row: ConditionRow) -> some View {
-        if let pass = row.result.pass {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.item) {
-                Image(systemName: pass ? "checkmark" : "xmark")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(pass ? Theme.ok : Theme.bad)
-                    .accessibilityLabel(pass ? "符合" : "不符合")
-                VStack(alignment: .leading, spacing: Theme.tight / 2) {
-                    Text((pass ? row.condition.yes : row.condition.no) ?? "")
-                    if row.result.x != nil { Note(numberLine(row)) }
-                    if row.result.edge { Note("邊緣：剛好在標準線附近，換個光線再掃可能會變", warn: true) }
-                    if row.result.unstable { Note("不穩：\(m.frames) 張畫面之間差很多，只當參考", warn: true) }
-                }
+    private func rowLine(_ row: ConditionRow, of x: OfficialResult) -> some View {
+        let c = row.condition
+        return HStack(alignment: .center, spacing: Theme.group) {
+            VerdictMark(row.result.pass)
+            VStack(alignment: .leading, spacing: Theme.tight / 2) {
+                Text(rowText(row)).fixedSize(horizontal: false, vertical: true)
+                flags(edge: row.result.edge, unstable: row.result.unstable)
             }
-        } else {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.item) {
-                Image(systemName: "minus").foregroundStyle(Theme.secondary).accessibilityHidden(true)
-                Note("\(row.condition.label ?? "")：這次量不到")
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            InfoButton(subject: c.plain ?? x.official.plain) { report.note(condition: c, of: x) }
         }
     }
 
-    private func numberLine(_ row: ConditionRow) -> String {
-        let key = row.condition.feature ?? ""
-        let value = report.format(key, row.result.x)
-        let standard = report.format(key, row.result.t)
-        return "\(row.condition.label ?? "") \(value)（標準 \(row.condition.op ?? "") \(standard)）"
+    private func rowText(_ row: ConditionRow) -> String {
+        guard let pass = row.result.pass else { return "\(row.condition.plain ?? "")：這次量不到" }
+        return (pass ? row.condition.yes : row.condition.no) ?? ""
     }
 
-    // MARK: 三停
+    /// 結論可能會變的提醒留在正面，數字在小圓鈕裡
+    @ViewBuilder private func flags(edge: Bool, unstable: Bool) -> some View {
+        if edge { Note("剛好在交界附近，換個光線再掃可能會變", warn: true) }
+        if unstable { Note("\(m.frames) 張畫面之間差很多，只當參考", warn: true) }
+    }
+
+    // MARK: 三段
 
     @ViewBuilder private var santingSection: some View {
-        if let segments = report.segments, let st = report.santingRule {
+        if let segments = report.segments, report.santingRule != nil {
             Card {
-                CardBlock(divider: false) { Text(report.santingHeadline ?? "") }
-                ForEach(segments) { s in
-                    CardBlock {
-                        HStack {
-                            Text(s.k).bold() + Text("・管\(s.life)")
-                            Spacer()
-                            Note(s.v < 0.95 ? "偏短" : s.v > 1.05 ? "偏長" : "接近平均")
-                        }
-                        Note(s.part)
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Theme.fill)
-                                Capsule().fill(Theme.accent)
-                                    .frame(width: geo.size.width * CGFloat(min(1, s.v / 1.4)))
-                            }
-                        }
-                        .frame(height: Theme.barHeight)
-                        .accessibilityHidden(true)
+                CardBlock(divider: false) {
+                    PlainLine(subject: "臉的三段", note: { report.santingNote }) {
+                        Text(report.santingHeadline ?? "").fixedSize(horizontal: false, vertical: true)
+                        Note("古書還看每一段豐不豐滿，這次沒看。")
                     }
                 }
-                CardBlock {
-                    Text(st.yuanwen ?? "").font(Theme.quote)
-                    Note(st.baihua)
-                    Note(st.source)
-                }
+                ForEach(segments) { s in CardBlock { segmentLine(s) } }
             }
         } else {
             Card {
-                CardBlock(divider: false) { Note("沒有拉髮際線，上段量不到，這次沒判。有瀏海的話，撥開再掃一次就能看。") }
-            }
-        }
-    }
-
-    // MARK: 十二宮
-
-    @ViewBuilder private var palacesSection: some View {
-        Note("判了 \(report.judgedPalaces) 宮，\(report.palaces.count - report.judgedPalaces) 宮這次量不到。點每一宮看細節。")
-            .padding(.horizontal, Theme.tight)
-        ForEach(report.palaces) { x in
-            let g = x.palace
-            Card {
-                DisclosureGroup {
-                    VStack(alignment: .leading, spacing: Theme.group) {
-                        Note("在臉上哪裡")
-                        Text(g.place)
-                        if g.measure != nil {
-                            Note("你的結果")
-                            Text(x.line)
-                            if x.edge { Note("邊緣：剛好在標準線附近，換個光線再掃可能會變", warn: true) }
-                            if x.unstable { Note("不穩：\(m.frames) 張畫面之間差很多，只當參考", warn: true) }
-                            if let notMeasured = g.notMeasured { Note(notMeasured) }
-                        } else {
-                            Note("為什麼這次沒判")
-                            Text(g.why ?? "")
-                        }
-                        if let yuanwen = g.yuanwen {
-                            Note("古書怎麼說")
-                            Text(yuanwen).font(Theme.quote)
-                            Text(g.baihua ?? "")
-                            if let source = g.source { Note(source) }
-                        }
-                        if let note = g.note { Note(note) }
-                    }
-                    .padding(.top, Theme.item)
-                } label: {
-                    VStack(alignment: .leading, spacing: Theme.tight) {
-                        HStack(spacing: Theme.item) {
-                            Text(g.topic).font(.body.weight(.semibold)).foregroundStyle(Color.primary)
-                            Spacer()
-                            Tag.status(x.status)
-                        }
-                        Note(g.name + (g.modern.map { "（現代叫\($0)）" } ?? "") + "・" + x.line)
+                CardBlock(divider: false) {
+                    PlainLine(subject: "臉的三段", note: { report.santingNote }) {
+                        Note("沒有拉髮際線，上段量不到，這次沒看。有瀏海的話，撥開再掃一次就能看。")
                     }
                 }
-                .padding(Theme.cardPad)
             }
         }
     }
 
-    // MARK: 其他條文
+    private func segmentLine(_ s: SantingSegment) -> some View {
+        PlainLine(subject: s.k, note: { report.note(segment: s) }) {
+            HStack {
+                Text(s.k).bold() + Text("・管\(s.life)")
+                Spacer()
+                Note(s.v < 0.95 ? "偏短" : s.v > 1.05 ? "偏長" : "接近平均")
+            }
+            Note(s.part)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.fill)
+                    Capsule().fill(Theme.accent)
+                        .frame(width: geo.size.width * CGFloat(min(1, s.v / 1.4)))
+                }
+            }
+            .frame(height: Theme.barHeight)
+            .accessibilityHidden(true)
+        }
+    }
+
+    // MARK: 十二件事
+
+    @ViewBuilder private var palacesSection: some View {
+        VStack(alignment: .leading, spacing: Theme.item) {
+            PlainLine(subject: "人生十二件事", note: { report.palacesNote }) {
+                VerdictSummary(tally: report.palaceTally, unit: "件")
+            }
+            Note("沒看的不算相符，也不算不同。")
+        }
+        .padding(.horizontal, Theme.tight)
+        ForEach(report.palaces) { x in palaceCard(x) }
+    }
+
+    private func palaceCard(_ x: PalaceResult) -> some View {
+        let g = x.palace
+        return Card {
+            CardBlock(divider: false) {
+                HStack(spacing: Theme.item) {
+                    Text(g.topic).font(.title3.weight(.semibold))
+                    Spacer()
+                    VerdictTag(status: x.status)
+                    InfoButton(subject: g.topic) { report.note(palace: x) }
+                }
+                Note("看臉上的" + g.place)
+                Text(x.line).fixedSize(horizontal: false, vertical: true)
+                flags(edge: x.edge, unstable: x.unstable)
+                if let baihua = g.baihua { Note("古書說：" + baihua) }
+            }
+        }
+    }
+
+    // MARK: 其他說法
 
     @ViewBuilder private var othersSection: some View {
         if report.others.isEmpty {
-            Card { CardBlock(divider: false) { Note("這次的量測沒有對到其他條文。") } }
+            Card { CardBlock(divider: false) { Note("這次沒有對上其他古書說法。") } }
         }
         ForEach(report.others) { r in
             Card {
                 CardBlock(divider: false) {
-                    HStack(alignment: .top) {
-                        Text(r.headline ?? r.part).font(.body.weight(.semibold))
-                        Spacer()
+                    PlainLine(subject: r.headline ?? "", note: { report.note(rule: r) }) {
                         if r.experimental == true { Tag(text: "實驗", color: Theme.bad, background: Theme.badSoft) }
+                        Text(r.headline ?? "")
+                            .font(.body.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(r.baihua).fixedSize(horizontal: false, vertical: true)
+                        if let note = r.note { Note(note) }
                     }
-                    Text(r.baihua)
-                    if let yuanwen = r.yuanwen { Text(yuanwen).font(Theme.quote) }
-                    if let note = r.note { Note(note) }
-                    Note("\(r.source)・文獻 \(r.lit)")
                 }
             }
         }
@@ -321,17 +322,15 @@ struct ReportSectionContent: View {
         Card {
             ForEach(Array(rules.cannotSee.enumerated()), id: \.offset) { i, c in
                 CardBlock(divider: i > 0) {
-                    Text("\(c.plain)（古書叫「\(c.name)」）").font(.body.weight(.semibold))
-                    Note(c.why)
+                    PlainLine(subject: c.plain, note: { report.note(cannotSee: c) }) {
+                        Text(c.plain).font(.body.weight(.semibold))
+                        Note(c.why)
+                    }
                 }
             }
         }
-        let skipped: [(String, String)] =
-            (m.hasHair ? [] : [("臉的上段", "沒有拉髮際線")])
-            + (m.answers.browTattoo ? [("眉毛", "你勾了紋眉或修眉")] : [])
-            + (m.answers.noseSurgery ? [("鼻子", "你勾了鼻子動過")] : [])
         if !skipped.isEmpty {
-            SectionTitle("你選了不判的")
+            SectionTitle("你選了不看的")
             Card {
                 ForEach(Array(skipped.enumerated()), id: \.offset) { i, s in
                     CardBlock(divider: i > 0) {
@@ -341,6 +340,14 @@ struct ReportSectionContent: View {
                 }
             }
         }
+    }
+
+    private var skipped: [(String, String)] {
+        var out: [(String, String)] = []
+        if !m.hasHair { out.append(("臉的上段", "沒有拉髮際線")) }
+        if m.answers.browTattoo { out.append(("眉毛", "你勾了紋眉或修眉")) }
+        if m.answers.noseSurgery { out.append(("鼻子", "你勾了鼻子動過")) }
+        return out
     }
 
     // MARK: 標註圖
@@ -362,34 +369,34 @@ struct ReportSectionContent: View {
     private var numbers: some View {
         Card {
             CardBlock(divider: false) {
-                Note("每一項都是比例，不受臉離鏡頭遠近影響；數字是 \(m.frames) 張畫面的中位數，「±」是四分位距。門檻是暫定值。")
+                Note("每一項都是比例或角度，不受臉離鏡頭遠近影響。數字取 \(m.frames) 張畫面的中間那一個。")
             }
             ForEach(FeatureEngine.order, id: \.self) { key in
                 if let stat = m.F[key], let def = rules.features[key] {
-                    CardBlock {
-                        HStack {
-                            Text(def.name).font(.subheadline.weight(.semibold))
-                            if stat.unstable { Tag(text: "不穩", color: Theme.bad, background: Theme.badSoft) }
-                            Spacer()
-                            Text("\(report.format(key, stat.v))　±\(report.format(key, stat.iqr))")
-                                .font(.subheadline.monospacedDigit())
-                        }
-                        Note(def.formula)
+                    CardBlock { numberLine(key, stat, def) }
+                }
+            }
+            if report.wuxing != nil {
+                CardBlock {
+                    PlainLine(subject: "臉形的分數", note: { report.wuxingNote }) {
+                        Text("臉形的分數").font(.subheadline.weight(.semibold))
                     }
                 }
             }
-            if let wx = report.wuxing {
-                CardBlock {
-                    Text("五行計分").font(.subheadline.weight(.semibold))
-                    Text(wx.scores.map { "\($0.name) " + String(format: "%.2f", $0.score) }.joined(separator: "　"))
-                        .font(.subheadline.monospacedDigit())
-                    Note(rules.wuxing.note)
-                }
-            }
             CardBlock {
-                Note("公式裡括號的數字是網頁版的點位編號；iOS 版在臉部網格和照片上取同一個位置。")
-                Note(String(format: "平均光線亮度 %.0f／255・規則庫 %@", m.light, m.rulesVersion))
+                Note(String(format: "掃的時候，畫面平均亮度 %.0f（最亮 255）・規則庫 %@", m.light, m.rulesVersion))
             }
+        }
+    }
+
+    private func numberLine(_ key: String, _ stat: FeatureStat, _ def: FeatureDef) -> some View {
+        PlainLine(subject: def.plainName, note: { report.note(feature: key) }) {
+            HStack {
+                Text(def.plainName).font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(BookNote.text(stat.v, unit: def.unit)).font(.subheadline.monospacedDigit())
+            }
+            if stat.unstable { Note("\(m.frames) 張畫面之間差很多，只當參考", warn: true) }
         }
     }
 }
@@ -404,33 +411,10 @@ struct LockedSection: View {
             CardBlock(divider: false) {
                 Label("\(section.title)在完整版裡", systemImage: "lock")
                     .font(.headline)
-                Text("完整版有三停、十二宮、其他古書條文，問古書 \(Paywall.includedQuestions) 題，再掃幾次都會出完整報告。")
+                Text("完整版有臉的三段、人生十二件事、其他古書說法，問古書 \(Paywall.includedQuestions) 題，再掃幾次都會出完整報告。")
                 Note("一次付清，這支 Apple ID 之後都能用。")
             }
         }
-    }
-}
-
-/// 合格／不合格／沒判的比例條
-struct StatusBar: View {
-    let pass: Int
-    let fail: Int
-    let unjudged: Int
-
-    var body: some View {
-        GeometryReader { geo in
-            let total = max(1, pass + fail + unjudged)
-            let gap = Theme.tight / 2
-            let usable = geo.size.width - gap * 2
-            HStack(spacing: gap) {
-                Theme.ok.frame(width: usable * CGFloat(pass) / CGFloat(total))
-                Theme.bad.frame(width: usable * CGFloat(fail) / CGFloat(total))
-                Theme.tertiary.frame(width: usable * CGFloat(unjudged) / CGFloat(total))
-            }
-        }
-        .frame(height: Theme.barHeight)
-        .clipShape(Capsule())
-        .accessibilityHidden(true)
     }
 }
 

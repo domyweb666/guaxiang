@@ -1,6 +1,6 @@
 // 瓜相「問古書」的中繼站（Cloudflare Worker）。
 // 只收文字：依據清單、簡介、問題。不收照片、不收臉部座標。金鑰放在 Cloudflare 的環境變數，不在網頁裡。
-import { buildRequest, LIMITS } from "../prompt.js";
+import { askOnce, checkBody, LIMITS } from "../prompt.js";
 
 const json = (obj, status, origin) => new Response(JSON.stringify(obj), {
   status, headers: { "content-type": "application/json; charset=utf-8", ...cors(origin) } });
@@ -9,6 +9,17 @@ const cors = origin => ({
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type",
   "vary": "origin" });
+
+async function callClaude(env, system, messages) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: env.MODEL || "claude-sonnet-5-5", max_tokens: 900, system, messages })
+  }).catch(() => null);
+  if (!r || !r.ok) throw new Error("AI 服務暫時無法回答");
+  const data = await r.json().catch(() => ({}));
+  return (data.content || []).filter(c => c.type === "text").map(c => c.text).join("\n");
+}
 
 export default {
   async fetch(req, env) {
@@ -25,20 +36,14 @@ export default {
     const raw = await req.text();
     if (raw.length > LIMITS.packChars + 8000) return json({ error: "內容太長" }, 413, origin);
     let body; try { body = JSON.parse(raw); } catch { return json({ error: "格式錯誤" }, 400, origin); }
-    const { pack, profile, question, history } = body || {};
-    if (!Array.isArray(pack) || !pack.length || typeof question !== "string" || !question.trim())
-      return json({ error: "缺少依據或問題" }, 400, origin);
-    if (profile?.age && Number(profile.age) < 18) return json({ error: "未滿 18 歲不提供" }, 400, origin);
+    const wrong = checkBody(body);
+    if (wrong) return json({ error: wrong }, 400, origin);
 
-    const { system, messages } = buildRequest({ pack, profile, question, history: Array.isArray(history) ? history : [] });
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: env.MODEL || "claude-sonnet-5-5", max_tokens: 900, system, messages })
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) return json({ error: "AI 服務暫時無法回答", detail: data?.error?.message || r.status }, 502, origin);
-    const text = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim();
-    return json({ text }, 200, origin);
+    // 回 {kind, answer}：已經檢查過的結構，跑題和健康那幾種不帶模型寫的字（prompt.js 的 askOnce）
+    try {
+      return json(await askOnce(body, (system, messages) => callClaude(env, system, messages)), 200, origin);
+    } catch (e) {
+      return json({ error: e.message }, 502, origin);
+    }
   }
 };

@@ -21,11 +21,8 @@ struct VisionCalibration {
     let orientation: CGImagePropertyOrientation
     /// Vision 的座標 → 原始畫面的座標（0–1，左上角是原點）
     let toBuffer: Dihedral
-    /// 對上的誤差（佔畫面的比例），越小越好
-    let score: Double
-
-    /// 沒對上時的預設：直拿手機、前鏡頭
-    static let fallback = VisionCalibration(orientation: .right, toBuffer: .antiTranspose, score: .infinity)
+    /// 對上的誤差（佔畫面的比例），越小越好。只知道方向、還沒跟 Vision 對過的是無限大
+    var score = Double.infinity
 
     /// 原始畫面的座標 → 轉正後照片上的位置（0–1，左上角是原點）
     func displayPoint(_ buffer: UV) -> UV {
@@ -47,6 +44,28 @@ enum VisionLandmarks {
     static let candidates: [(CGImagePropertyOrientation, Dihedral)] = [
         (.right, .antiTranspose), (.left, .transpose), (.up, .flipY), (.down, .flipX)
     ]
+
+    /// 轉哪個方向臉才是正的：看 ARKit 算出來的嘴和兩眼，挑轉完以後眼睛最在嘴正上方的那個方向。
+    /// 不准改成由 Vision 的分數挑：Vision 躺著的臉也找得到，四個方向的分數幾乎一樣，等於隨機挑。
+    /// - Parameters:
+    ///   - eyes: 兩顆眼球在原始畫面上的位置（0–1）
+    ///   - mouth: 嘴巴在原始畫面上的位置（0–1）
+    ///   - size: 原始畫面的像素大小。畫面不是正方形，比方向之前要換成像素
+    static func upright(eyes: [UV], mouth: UV, size: CGSize) -> VisionCalibration {
+        let n = Double(max(1, eyes.count))
+        let upX = (eyes.map(\.x).reduce(0, +) / n - mouth.x) * Double(size.width)
+        let upY = (eyes.map(\.y).reduce(0, +) / n - mouth.y) * Double(size.height)
+        let all = candidates.map { VisionCalibration(orientation: $0.0, toBuffer: $0.1) }
+        // 照片正上方在原始畫面上是哪一邊（一定貼著畫面的某一條邊，長度是 1）
+        let match: (VisionCalibration) -> Double = { c in
+            let top = c.bufferPoint(fromDisplay: UV(x: 0.5, y: 0))
+            let bottom = c.bufferPoint(fromDisplay: UV(x: 0.5, y: 1))
+            return (top.x - bottom.x) * upX + (top.y - bottom.y) * upY
+        }
+        var best = all[0]
+        for c in all.dropFirst() where match(c) > match(best) { best = c }
+        return best
+    }
 
     static func detect(_ buffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> VisionFace? {
         let request = VNDetectFaceLandmarksRequest()
@@ -82,29 +101,26 @@ enum VisionLandmarks {
             eyeB: points(marks.rightEye))
     }
 
-    /// 試四個方向，看哪一個方向 Vision 找到的眼睛和嘴，跟 ARKit 算出來的位置對得上。
+    /// 方向已經由 upright 定好，這裡只看那個方向 Vision 找到的眼睛和嘴，跟 ARKit 算出來的位置對不對得上。
     /// - Parameters:
+    ///   - upright: 臉朝上的那個方向
     ///   - eyes: ARKit 兩顆眼球在原始畫面上的位置
-    ///   - mouth: ARKit 估的嘴巴位置（用來分辨上下顛倒）
-    static func calibrate(_ buffer: CVPixelBuffer, eyes: [UV], mouth: UV) -> VisionCalibration? {
-        guard eyes.count == 2 else { return nil }
-        var best: VisionCalibration?
-        for (orientation, dihedral) in candidates {
-            guard let face = detect(buffer, orientation: orientation), face.eyes.count == 2, !face.outerLips.isEmpty
-            else { continue }
-            let seen = face.eyes.map(dihedral.apply)
-            let n = Double(face.outerLips.count)
-            let lips = dihedral.apply(
-                UV(x: face.outerLips.map(\.x).reduce(0, +) / n, y: face.outerLips.map(\.y).reduce(0, +) / n))
-            let straight = (gap(seen[0], eyes[0]) + gap(seen[1], eyes[1])) / 2
-            let crossed = (gap(seen[0], eyes[1]) + gap(seen[1], eyes[0])) / 2
-            let score = min(straight, crossed) + gap(lips, mouth) / 2
-            if best == nil || score < best!.score {
-                best = VisionCalibration(orientation: orientation, toBuffer: dihedral, score: score)
-            }
-        }
-        guard let best, best.score < 0.08 else { return nil }
-        return best
+    ///   - mouth: ARKit 估的嘴巴位置
+    static func calibrate(
+        _ buffer: CVPixelBuffer, upright: VisionCalibration, eyes: [UV], mouth: UV
+    ) -> VisionCalibration? {
+        guard eyes.count == 2, let face = detect(buffer, orientation: upright.orientation), face.eyes.count == 2,
+            !face.outerLips.isEmpty
+        else { return nil }
+        let seen = face.eyes.map(upright.toBuffer.apply)
+        let n = Double(face.outerLips.count)
+        let lips = upright.toBuffer.apply(
+            UV(x: face.outerLips.map(\.x).reduce(0, +) / n, y: face.outerLips.map(\.y).reduce(0, +) / n))
+        let straight = (gap(seen[0], eyes[0]) + gap(seen[1], eyes[1])) / 2
+        let crossed = (gap(seen[0], eyes[1]) + gap(seen[1], eyes[0])) / 2
+        var result = upright
+        result.score = min(straight, crossed) + gap(lips, mouth) / 2
+        return result.score < 0.08 ? result : nil
     }
 
     private static func gap(_ a: UV, _ b: UV) -> Double {

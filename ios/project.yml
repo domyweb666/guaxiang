@@ -41,8 +41,12 @@ targets:
         UILaunchScreen: {}
         # iPhone Pro 的螢幕能到 120Hz，沒開這個動畫會被鎖在 60
         CADisableMinimumFrameDurationOnPhone: true
-        # 相機用途要寫具體（HANDOFF 第九節）
-        NSCameraUsageDescription: 用前鏡頭量臉的比例。畫面只在手機上處理，不會離開手機。
+        # 相機用途要寫具體（HANDOFF 第九節）。
+        # 「開發工具裡…」那一句和下面兩項是 DEVTOOLS 專用（連電腦的 Claude CLI），上架前跟 DEVTOOLS 一起拿掉
+        NSCameraUsageDescription: 用前鏡頭量臉的比例。畫面只在手機上處理，不會離開手機。開發工具裡連電腦的時候，也用來掃電腦上的 QR code。
+        NSLocalNetworkUsageDescription: 連到同一個 Wi-Fi 裡你自己的電腦，用那台電腦的 Claude 回答問古書。
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.domyweb.guaxiang
@@ -52,8 +56,8 @@ targets:
         # 只給 iPhone（1）
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # DEVTOOLS：設定頁多一區開發工具（頂點對照、範例報告、自己貼金鑰）。
-        # 多米要在 TestFlight 版上對頂點，所以現在兩種版本都開；上架前把這一行拿掉（.vibe/代決清單.md）。
+        # DEVTOOLS：設定頁多一區開發工具（範例報告、連電腦的 Claude CLI、自己貼金鑰）。
+        # 多米要在 TestFlight 版上用，所以現在兩種版本都開；上架前把這一行拿掉（.vibe/代決清單.md）。
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) DEVTOOLS
 
   GuaxiangTests:

@@ -180,7 +180,7 @@ final class EngineUnitTests: XCTestCase {
         XCTAssertNotNil(F["a"])
         XCTAssertNil(F["b"], "只有五分之一的畫面量得到，不能算數")
 
-        // 缺眉毛的量測：保壽官要寫沒判，不能算合格也不能算不合格
+        // 缺眉毛的量測：眉毛那一官要寫沒看，不能算相符也不能算不同
         let m = Measurement(
             when: Date(), frames: 5, light: 140, hasHair: false, answers: Answers(),
             F: ["eye_lw": FeatureStat(v: 3.5, iqr: 0.01, unstable: false)], rulesVersion: rules.version)

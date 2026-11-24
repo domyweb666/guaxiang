@@ -1,7 +1,7 @@
 import Foundation
 
 /// 存在手機裡的那一份：只有量出來的數字和掃描前的勾選。照片另外存（Store/FacePhoto.swift），匯出時不帶。
-/// 合格不合格每次打開都照 rules.json 重新比一次，所以規則庫更新後舊報告會跟著新規則走。
+/// 相符或不同每次打開都照 rules.json 重新比一次，所以規則庫更新後舊報告會跟著新規則走。
 struct Measurement: Codable, Equatable {
     var when: Date
     var frames: Int
@@ -65,7 +65,7 @@ struct Report {
     var unstableNames: [String] {
         FeatureEngine.order.compactMap { key in
             guard measurement.F[key]?.unstable == true, let def = rules.features[key] else { return nil }
-            return def.name
+            return def.plainName
         }
     }
 
@@ -73,33 +73,16 @@ struct Report {
         officials.filter { $0.status == status }.count
     }
 
-    /// 五官那一列底下的一句話：沒判寫原因，合格寫符合哪幾條，不合格寫哪幾條不符合
-    static func officialLine(_ x: OfficialResult) -> String {
-        switch x.status {
-        case .unjudged:
-            return x.why ?? ""
-        case .pass:
-            return x.rows.compactMap { $0.condition.yes }.joined(separator: "，")
-        case .fail:
-            return x.rows.filter { $0.result.pass != true }.compactMap { $0.condition.no }.joined(separator: "，")
-        }
-    }
-
-    /// 數字怎麼顯示：百分比一位小數、角度一位小數、其他兩位小數
-    func format(_ key: String, _ value: Double?) -> String {
-        guard let value, value.isFinite else { return "—" }
-        switch rules.features[key]?.unit {
-        case "%": return String(format: "%.1f%%", value * 100)
-        case "度": return String(format: "%.1f°", value)
-        default: return String(format: "%.2f", value)
-        }
-    }
+    var officialTally: Tally { Tally(officials.map(\.status)) }
+    var palaceTally: Tally { Tally(palaces.map(\.status)) }
 }
 
 /// 「古書怎麼說你」最上面那幾點
 struct SummaryPoint: Identifiable {
     let title: String
     let body: String
+    /// 旁邊小圓鈕點開的內容
+    let note: BookNote?
     var id: String { title + body }
 }
 
@@ -109,59 +92,55 @@ extension Report {
         let W = rules.wuxing
         if let wx = wuxing, let type = W.types[wx.host] {
             points.append(
-                SummaryPoint(title: "臉形：\(wx.host)形人", body: "\(type.plainShape)。古書說：\(type.plainLine)"))
+                SummaryPoint(
+                    title: "\(wx.host)形・\(type.plainShape)", body: "古書說：\(type.plainLine)", note: wuxingNote))
         } else {
-            points.append(SummaryPoint(title: "臉形", body: "量測資料不足，這次沒判。"))
+            points.append(SummaryPoint(title: "臉形", body: "這次量到的資料不夠，沒看。", note: wuxingNote))
         }
 
-        let names: ([OfficialResult]) -> String = { $0.map(\.official.plain).joined(separator: "、") }
-        let ok = officials.filter { $0.status == .pass }
-        let bad = officials.filter { $0.status == .fail }
-        let na = officials.filter { $0.status == .unjudged }
-        var guan = ok.isEmpty ? "沒有一個合古書的標準" : names(ok) + "合古書的標準"
-        if !bad.isEmpty { guan += "；" + names(bad) + "不合" }
-        if !na.isEmpty { guan += "；" + names(na) + "這次沒判" }
-        points.append(SummaryPoint(title: "五官：\(ok.count) 個合格", body: guan + "。" + W.guan))
+        let organs = officials.map { (name: $0.official.plain, status: $0.status) }
+        points.append(
+            SummaryPoint(
+                title: "五官", body: officialTally.sentence("項") + "。" + Self.grouped(organs) + W.guan,
+                note: officialsNote))
 
-        points.append(SummaryPoint(title: "臉的三段", body: santingHeadline ?? "這次沒判。"))
+        points.append(SummaryPoint(title: "臉的三段", body: santingHeadline ?? "這次沒看。", note: santingNote))
 
-        let pOk = palaces.filter { $0.status == .pass }
-        let pBad = palaces.filter { $0.status == .fail }
-        let pNa = palaces.filter { $0.status == .unjudged }
-        var gong = ""
-        if !pOk.isEmpty { gong += pOk.map(\.palace.topic).joined(separator: "、") + "合古書的標準" }
-        if !pOk.isEmpty, !pBad.isEmpty { gong += "；" }
-        if !pBad.isEmpty { gong += pBad.map(\.palace.topic).joined(separator: "、") + "不合" }
-        if !pOk.isEmpty || !pBad.isEmpty { gong += "。" }
-        gong += "其他 \(pNa.count) 宮這次沒判，每一宮都寫了原因。"
-        points.append(SummaryPoint(title: "十二宮：量得到 \(pOk.count + pBad.count) 宮", body: gong))
+        let topics = palaces.map { (name: $0.palace.topic, status: $0.status) }
+        points.append(
+            SummaryPoint(
+                title: "人生十二件事",
+                body: palaceTally.sentence("件") + "。" + Self.grouped(topics, unseen: false) + "沒看的都寫了原因。",
+                note: palacesNote))
 
         for r in others {
             points.append(
-                SummaryPoint(title: r.headline ?? r.part, body: r.experimental == true ? "實驗項目，只當參考。" : ""))
+                SummaryPoint(
+                    title: r.headline ?? r.part, body: r.experimental == true ? "實驗項目，只當參考。" : "",
+                    note: note(rule: r)))
         }
         return points
     }
 
-    /// 臉形是怎麼看出來的（照本工具暫定的計分方式描述）
+    /// 「相符的是鼻子；不同的是眉毛、嘴巴；沒看的是耳朵。」三種都沒有就是空字串
+    private static func grouped(_ items: [(name: String, status: Status)], unseen: Bool = true) -> String {
+        var parts: [String] = []
+        for status in [Status.pass, .fail, .unjudged] {
+            if status == .unjudged, !unseen { continue }
+            let names = items.filter { $0.status == status }.map { $0.name }
+            if !names.isEmpty { parts.append("\(status.word)的是\(names.joined(separator: "、"))") }
+        }
+        return parts.isEmpty ? "" : parts.joined(separator: "；") + "。"
+    }
+
+    /// 臉形是怎麼看出來的（照本工具暫定的計分方式描述）。數字在小圓鈕裡
     var wuxingWhy: String? {
-        guard let wx = wuxing else { return nil }
-        let n2: (Double?) -> String = { v in
-            guard let v, v.isFinite else { return "—" }
-            return String(format: "%.2f", v)
-        }
-        let n0: (Double?) -> String = { v in
-            guard let v, v.isFinite else { return "—" }
-            return String(format: "%.0f", v)
-        }
-        let A = measurement.F["face_aspect"]?.v, R = measurement.F["fore_jaw"]?.v
-        let J = measurement.F["jaw_angle"]?.v
-        switch wx.host {
-        case "木": return "你的臉長是寬的 \(n2(A)) 倍，比例偏長。"
-        case "金": return "額頭和下顎差不多寬（額寬是下顎的 \(n2(R)) 倍），下顎角 \(n0(J))°，偏方。"
-        case "火": return "額頭比下顎窄（額寬只有下顎的 \(n2(R)) 倍），上窄下寬。"
-        case "水": return "臉長只有寬的 \(n2(A)) 倍，下顎角 \(n0(J))°，偏圓。"
-        case "土": return "臉長只有寬的 \(n2(A)) 倍，下巴那一段偏長，看起來厚實。"
+        switch wuxing?.host {
+        case "木": return "你的臉長跟臉寬比起來偏長。"
+        case "金": return "你的額頭和下顎差不多寬，下顎偏方。"
+        case "火": return "你的額頭比下顎窄，上窄下寬。"
+        case "水": return "你的臉長跟臉寬比起來偏短，下顎偏圓。"
+        case "土": return "你的臉長跟臉寬比起來偏短，下巴那一段偏長。"
         default: return nil
         }
     }

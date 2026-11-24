@@ -86,7 +86,7 @@ final class AppModel: ObservableObject {
 
     func scanFinished(_ result: ScanCapture) {
         capture = result
-        // 照片上找得到眉心和下巴才拉得了髮際線；找不到就直接出報告（三停寫沒判）
+        // 照片上找得到眉心和下巴才拉得了髮際線；找不到就直接出報告（三段寫沒看）
         if result.best.image != nil, result.best.glabella != nil, result.best.chin != nil {
             path.append(.hairline)
         } else {
@@ -223,28 +223,22 @@ struct HomeView: View {
         }
     }
 
-    /// 示意圖和一句真的古書原文（rules.json 三停那一條的第一句）
+    /// 示意圖和一句古書的白話（rules.json 三段那一條），原文在旁邊的小圓鈕裡
     private var hero: some View {
         Card {
             VStack(spacing: Theme.group) {
-                FaceSketch().frame(maxWidth: 180)
-                if let line = heroQuote {
-                    Text("「\(line.text)」").font(Theme.quote).multilineTextAlignment(.center)
-                    Note("\(line.book)　報告裡每一句都附這樣的出處").multilineTextAlignment(.center)
+                FaceSketch().frame(maxWidth: Theme.sketchWidth)
+                if let rules = model.rules, let rule = rules.rules.first(where: { $0.id == "santing-equal" }) {
+                    PlainLine(subject: "臉的三段", note: { BookNote.rule(rule, rules: rules, report: nil) }) {
+                        Text(rule.baihua).fixedSize(horizontal: false, vertical: true)
+                        Note("報告裡看到這顆小圓鈕，點了就是古書原文和怎麼估的。")
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(Theme.cardPad)
             .padding(.vertical, Theme.tight)
         }
-    }
-
-    private var heroQuote: (text: String, book: String)? {
-        guard let rule = model.rules?.rules.first(where: { $0.id == "santing-equal" }), let yuanwen = rule.yuanwen,
-            let first = yuanwen.split(separator: "。").first
-        else { return nil }
-        let book = rule.source.components(separatedBy: "（").first ?? rule.source
-        return (String(first) + "。", book)
     }
 
     private var promises: some View {
@@ -285,18 +279,18 @@ struct HomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: Theme.innerRadius, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Theme.tight) {
-                        Text(r.wuxing.map { "臉形推估：\($0.host)形人" } ?? "臉形這次沒判").font(.title3.weight(.semibold))
-                        if let wx = r.wuxing, let type = r.rules.wuxing.types[wx.host] {
-                            Text(type.plainShape).font(.subheadline).foregroundStyle(Theme.secondary)
+                        Text(shapeTitle(r)).font(.title3.weight(.semibold)).multilineTextAlignment(.leading)
+                        if r.wuxing != nil {
+                            Text("臉形推估").font(.subheadline).foregroundStyle(Theme.secondary)
                         }
                     }
                 }
                 HStack(spacing: Theme.item) {
                     stat(
-                        "五官", "\(r.count(.pass)) 合格",
-                        ["\(r.count(.fail)) 不合格", "\(r.count(.unjudged)) 沒判"])
-                    stat("三停", r.santingShort, [r.santingLife])
-                    stat("十二宮", "判了 \(r.judgedPalaces) 宮", ["\(r.palaces.count - r.judgedPalaces) 宮量不到"])
+                        "五官", VerdictShort.lead(r.officialTally, "項"), VerdictShort.rest(r.officialTally, "項"))
+                    stat("三段", r.santingShort, [r.santingLife])
+                    stat(
+                        "十二件事", VerdictShort.lead(r.palaceTally, "件"), VerdictShort.rest(r.palaceTally, "件"))
                 }
             }
             .foregroundStyle(Color.primary)
@@ -307,6 +301,11 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         }
         .buttonStyle(PressStyle())
+    }
+
+    private func shapeTitle(_ r: Report) -> String {
+        guard let wx = r.wuxing, let type = r.rules.wuxing.types[wx.host] else { return "臉形這次沒看" }
+        return "\(wx.host)形・\(type.plainShape)"
     }
 
     /// sub 有幾段就用「・」接成一行，放不下就在「・」後面斷
@@ -347,7 +346,7 @@ struct HomeView: View {
     }
 }
 
-/// 掃描前：兩項必勾（滿 18 歲而且掃自己、拿下眼鏡），兩項決定哪些部位不判。
+/// 掃描前：兩項必勾（滿 18 歲而且掃自己、拿下眼鏡），兩項決定哪些部位不看。
 /// 按鈕寫「繼續」，接著才跳系統的相機詢問（準則 3-31、12-19）
 struct ConsentView: View {
     @EnvironmentObject private var model: AppModel
@@ -370,7 +369,7 @@ struct ConsentView: View {
                                 isOn: $noGlasses)
                         }
                     }
-                    Note("有的話打開，那個部位就不判").padding(.top, Theme.section - Theme.group).padding(.horizontal, Theme.tight)
+                    Note("有的話打開，那個部位就不看").padding(.top, Theme.section - Theme.group).padding(.horizontal, Theme.tight)
                     Card {
                         Toggle("紋眉、霧眉，或眉毛修過很多", isOn: $model.answers.browTattoo)
                             .padding(.horizontal, Theme.cardPad)

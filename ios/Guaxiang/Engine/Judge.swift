@@ -16,7 +16,8 @@ struct Answers: Codable, Equatable {
     var noGlasses = true
 }
 
-/// 成＝合格、不成＝不合格、不判＝沒判。三種要分開數，沒判的不能算進合格或不合格（鐵則 7）
+/// 跟古書寫的相符、不同、這次沒看。三種要分開數，沒看的不算相符也不算不同（鐵則 7）。
+/// 原始值跟網頁版一樣，標準答案測試要比，不給人看
 enum Status: String, Codable {
     case pass = "成"
     case fail = "不成"
@@ -24,10 +25,38 @@ enum Status: String, Codable {
 
     var word: String {
         switch self {
-        case .pass: return "合格"
-        case .fail: return "不合格"
-        case .unjudged: return "沒判"
+        case .pass: return "相符"
+        case .fail: return "不同"
+        case .unjudged: return "沒看"
         }
+    }
+
+    init(_ pass: Bool?) {
+        guard let pass else {
+            self = .unjudged
+            return
+        }
+        self = pass ? .pass : .fail
+    }
+}
+
+/// 三種各有幾項。沒看的單獨數，加起來一定等於總數
+struct Tally: Equatable {
+    let same: Int
+    let different: Int
+    let unseen: Int
+
+    init(_ statuses: [Status]) {
+        same = statuses.filter { $0 == .pass }.count
+        different = statuses.filter { $0 == .fail }.count
+        unseen = statuses.filter { $0 == .unjudged }.count
+    }
+
+    var total: Int { same + different + unseen }
+
+    /// 完整一句：三種都寫出來，是 0 也寫
+    func sentence(_ unit: String) -> String {
+        "\(same) \(unit)跟古書寫的相符・\(different) \(unit)不同・\(unseen) \(unit)沒看"
     }
 }
 
@@ -60,7 +89,8 @@ struct WuxingResult {
     let host: String
     let guest: String?
     let weak: Bool
-    let relation: (kind: String, lines: [String])?
+    /// plain 是給人看的白話，lines 是有古書名和術語的版本（給依據清單）
+    let relation: (kind: String, lines: [String], plain: [String])?
 }
 
 struct PalaceResult: Identifiable {
@@ -154,15 +184,15 @@ struct Judge {
             if o.blockedBy == "brow_tattoo", answers.browTattoo {
                 return OfficialResult(
                     official: o, status: .unjudged,
-                    why: "你勾了紋眉或修眉，眉形是選出來的，不是天生的（2-4、2-14）", rows: [])
+                    why: "你勾了紋眉或修眉，眉形是選出來的，不是天生的", rows: [])
             }
             if o.blockedBy == "nose_surgery", answers.noseSurgery {
                 return OfficialResult(
-                    official: o, status: .unjudged, why: "你勾了鼻子動過，原典假設臉是天生的（第五部）", rows: [])
+                    official: o, status: .unjudged, why: "你勾了鼻子動過，古書講的是天生的樣子", rows: [])
             }
             let rows = o.conditions.map { ConditionRow(condition: $0, result: test(F, $0)) }
             if rows.contains(where: { $0.result.pass == nil }) {
-                return OfficialResult(official: o, status: .unjudged, why: "量測資料不足", rows: rows)
+                return OfficialResult(official: o, status: .unjudged, why: "這次量到的資料不夠", rows: rows)
             }
             let status: Status = rows.allSatisfy { $0.result.pass == true } ? .pass : .fail
             return OfficialResult(official: o, status: status, why: nil, rows: rows)
@@ -176,7 +206,7 @@ struct Judge {
         }
     }
 
-    /// 臉形推估。計分是本工具暫定的，古書沒有給數字。少了臉長寬比、額顎比或下顎角就不判。
+    /// 臉形推估。計分是本工具暫定的，古書沒有給數字。少了臉長寬比、額顎比或下顎角就不看。
     func wuxing(_ F: Measured, hasHair: Bool) -> WuxingResult? {
         guard let A = F["face_aspect"]?.v, let R = F["fore_jaw"]?.v, let J = F["jaw_angle"]?.v else { return nil }
         let Lh: Double
@@ -201,23 +231,27 @@ struct Judge {
         let host = ranked[0].name, hostScore = ranked[0].score
         let guest: String? = (ranked[1].score >= 0.25 && ranked[1].score >= hostScore * 0.6) ? ranked[1].name : nil
         let W = rules.wuxing
-        var relation: (kind: String, lines: [String])?
+        var relation: (kind: String, lines: [String], plain: [String])?
         if let guest {
-            let line: (String) -> String = { W.keRule[$0] ?? "" }
+            let lines: ([String]) -> [String] = { $0.map { W.keRule[$0] ?? "" } }
+            let plain: ([String]) -> [String] = { $0.map { W.keRulePlain[$0] ?? "" } }
             if W.sheng[guest] == host {
-                relation = ("客生主", [line("sheng")])
+                let keys = ["sheng"]
+                relation = ("客生主", lines(keys), plain(keys))
             } else if W.ke[guest] == host {
-                relation = ("客剋主", [line("quanbian_guestKillsHost"), line("bingjian_guestKillsHost")])
+                let keys = ["quanbian_guestKillsHost", "bingjian_guestKillsHost"]
+                relation = ("客剋主", lines(keys), plain(keys))
             } else if W.ke[host] == guest {
-                relation = ("主剋客", [line("quanbian_hostKillsGuest"), line("bingjian_hostKillsGuest")])
+                let keys = ["quanbian_hostKillsGuest", "bingjian_hostKillsGuest"]
+                relation = ("主剋客", lines(keys), plain(keys))
             } else if W.sheng[host] == guest {
-                relation = ("主生客", ["兩本書都沒有這一組的例子，古書在這裡沒有說法。"])
+                relation = ("主生客", ["兩本書都沒有這一組的例子，古書在這裡沒有說法。"], plain(["none"]))
             }
         }
         return WuxingResult(scores: scores, host: host, guest: guest, weak: hostScore < 0.2, relation: relation)
     }
 
-    /// 十二宮。量得到的才判，其他寫明為什麼這次沒判。
+    /// 十二宮。量得到的才比，其他寫明為什麼這次沒看。
     func palaces(_ F: Measured, answers: Answers, santingRule: Rule?) -> [PalaceResult] {
         rules.palaces.map { g -> PalaceResult in
             let unjudged: (String) -> PalaceResult = {
@@ -225,7 +259,7 @@ struct Judge {
             }
             guard let m = g.measure else { return unjudged(g.why ?? "") }
             if g.blockedBy == "nose_surgery", answers.noseSurgery {
-                return unjudged("你勾了鼻子動過，原典假設臉是天生的。")
+                return unjudged("你勾了鼻子動過，古書講的是天生的樣子。")
             }
             if g.blockedBy == "brow_tattoo", answers.browTattoo {
                 return unjudged("你勾了紋眉或修眉，眉形是選出來的，不是天生的。")
@@ -238,7 +272,7 @@ struct Judge {
                     unstable: false)
             }
             let t = test(F, m)
-            guard let pass = t.pass else { return unjudged("量測資料不足。") }
+            guard let pass = t.pass else { return unjudged("這次量到的資料不夠。") }
             return PalaceResult(
                 palace: g, status: pass ? .pass : .fail, line: (pass ? m.yes : m.no) ?? "", edge: t.edge,
                 unstable: t.unstable)
