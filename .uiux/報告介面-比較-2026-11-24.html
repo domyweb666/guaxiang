@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>瓜相報告介面比較</title>
+<style>
+:root{--accent:#B33A2B;--soft:#F6E4DF;--canvas:#F7F4EC;--card:#fff;--fill:#EFEBE3;--sep:#E5E1D8;--ink:#1c1c1e;--sub:#66666D;--ok:#2F6B4F;--okS:#E3ECE5;--bad:#7A4B00;--badS:#F6EBD5}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#dcd8cf;color:var(--ink);font:16px/1.5 -apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:24px 16px 48px}
+h1{font-size:24px;margin:0 0 4px}
+.lead{color:#555;margin:0 0 24px;max-width:760px}
+.cols{display:flex;gap:40px;flex-wrap:wrap}
+.col{width:375px;max-width:100%}
+.col h2{font-size:19px;margin:0 0 4px}
+.col>p{margin:0 0 12px;font-size:14px;color:#444;min-height:84px}
+.phone{position:relative;width:100%;height:760px;border-radius:44px;overflow:hidden;background:var(--canvas);box-shadow:0 0 0 8px #222,0 12px 30px #0004}
+.scroll{position:absolute;inset:0;overflow-y:auto;padding:64px 20px 130px;scrollbar-width:none}
+.back{position:absolute;top:16px;left:16px;width:44px;height:44px;border-radius:22px;background:#fffc;border:0;font-size:22px;z-index:3;backdrop-filter:blur(12px)}
+.title{font-size:30px;font-weight:700;margin:8px 4px 0}
+.meta{color:var(--sub);margin:0 4px 14px;font-size:14px}
+.card{background:var(--card);border-radius:24px;overflow:hidden;margin-bottom:12px}
+.blk{padding:14px 16px;border-top:1px solid var(--sep)}
+.blk:first-child{border-top:0}
+.small{font-size:13px;color:var(--sub)}
+.quote{font-family:"Songti TC","PMingLiU",serif;font-size:17px}
+.tag{font-size:12px;font-weight:600;border-radius:8px;padding:1px 8px;float:right}
+.tag.ok{color:var(--ok);background:var(--okS)}.tag.bad{color:var(--bad);background:var(--badS)}.tag.na{color:var(--sub);background:var(--fill)}
+.face{display:block;width:100%;background:#8a7b6e}
+/* A */
+.pills{position:absolute;left:12px;right:12px;bottom:22px;display:grid;grid-template-columns:repeat(5,1fr);padding:6px;border-radius:34px;background:#fffd;backdrop-filter:blur(20px);box-shadow:0 6px 24px #0003;z-index:4}
+.pills button{border:0;background:none;min-height:54px;border-radius:28px;font:600 13px/1.25 inherit;font-family:inherit;color:var(--ink);padding:0}
+.pills button b{display:block;font-size:19px;font-weight:600}
+.pills button.on{background:var(--soft);color:var(--accent)}
+.sheet{position:absolute;left:10px;right:10px;bottom:10px;height:40%;background:var(--canvas);border-radius:34px;box-shadow:0 -4px 40px #0004;transform:translateY(110%);transition:transform .42s cubic-bezier(.2,.9,.25,1),height .35s cubic-bezier(.2,.9,.25,1);z-index:6;display:flex;flex-direction:column;overflow:hidden;touch-action:none}
+.sheet.open{transform:none}
+.sheet.full{height:calc(100% - 64px)}
+.grab{flex:none;padding:10px 16px 8px;cursor:grab}
+.grab:before{content:"";display:block;width:40px;height:5px;border-radius:3px;background:#c9c4b9;margin:0 auto 10px}
+.grab strong{font-size:20px}
+.grab button{float:right;border:0;background:var(--fill);width:32px;height:32px;border-radius:16px;font-size:15px}
+.inner{flex:1;overflow-y:auto;padding:4px 16px 24px;touch-action:pan-y;scrollbar-width:none}
+.dim{opacity:.18}
+svg .g{transition:opacity .25s}
+/* B */
+.page{display:none}.page.on{display:block}
+</style>
+</head>
+<body>
+<h1>瓜相報告：兩種拆法，都能按</h1>
+<p class="lead">QC-0006 第 3 筆。內容是範例，人臉是示意圖。A 的視窗可以往上拖成整頁、往下拖關掉。兩邊都把「這次沒看的」「數字明細」收進「更多」。</p>
+<div class="cols">
+ <div class="col">
+  <h2>A　下方懸浮視窗（推薦）</h2>
+  <p>照片一直在上面。按下面一顆，那一區從底下浮上來，照片上只亮那一區的位置。代價：十二宮比較長，要往上拖成整頁才看得完；一次只看一區。</p>
+  <div class="phone" id="A">
+   <button class="back" aria-label="返回">‹</button>
+   <div class="scroll"><div class="title">你的報告</div><div class="meta">2026年11月24日</div><div class="card" data-face></div><div class="card" data-c="sum"></div></div>
+   <div class="pills"></div>
+   <div class="sheet"><div class="grab"><button aria-label="關閉">✕</button><strong></strong></div><div class="inner"></div></div>
+  </div>
+ </div>
+ <div class="col">
+  <h2>B　底部懸浮分頁列</h2>
+  <p>像一般 app 的分頁，每一區一整頁，切換最快。代價：照片只在「總覽」看得到，看五官時要切回去對位置；下面固定佔一條。</p>
+  <div class="phone" id="B">
+   <button class="back" aria-label="返回">‹</button>
+   <div class="scroll"></div>
+   <div class="pills"></div>
+  </div>
+ </div>
+</div>
+<script>
+const face = () => `<svg class="face" viewBox="0 0 340 300" role="img" aria-label="示意臉">
+<rect width="340" height="300" fill="#b9a999"/><path d="M170 18c62 0 92 48 90 118-2 66-42 146-90 146S82 202 80 136C78 66 108 18 170 18z" fill="#e6c9b0"/>
+<g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<g class="g" data-g="guan"><path d="M104 112q22-12 46-2M190 110q24-10 46 2" stroke="#C77DFF"/><path d="M108 134q20-14 40 0q-20 12-40 0zM192 134q20-14 40 0q-20 12-40 0z" stroke="#3DA5FF"/><path d="M170 124L170 192l-10 6" stroke="#3DDC84"/><path d="M140 228q30-16 60 0q-30 20-60 0z" stroke="#FF6B8A"/></g>
+<g class="g" data-g="ting" stroke="#FFB224" stroke-dasharray="8 6" stroke-width="2"><path d="M14 40H326M14 112H326M14 200H326M14 280H326"/></g></g>
+<g class="g" data-g="ting" font-size="12" font-weight="600" fill="#2A1A00"><g fill="#FFB224"><rect x="286" y="31" width="42" height="18" rx="9"/><rect x="286" y="103" width="42" height="18" rx="9"/><rect x="286" y="191" width="42" height="18" rx="9"/><rect x="286" y="271" width="42" height="18" rx="9"/></g><text x="295" y="44">髮際</text><text x="295" y="116">眉心</text><text x="295" y="204">鼻底</text><text x="295" y="284">下巴</text><g fill="#fff"><text x="20" y="80">上停</text><text x="20" y="160">中停</text><text x="20" y="244">下停</text></g></g>
+<g class="g" data-g="gong" fill="#fff" stroke="#B33A2B" stroke-width="3" opacity="0"><circle cx="170" cy="66" r="8"/><circle cx="170" cy="112" r="8"/><circle cx="170" cy="192" r="8"/><circle cx="104" cy="112" r="8"/><circle cx="236" cy="112" r="8"/><circle cx="128" cy="134" r="8"/><circle cx="212" cy="134" r="8"/><circle cx="170" cy="266" r="8"/></g></svg>`;
+const row = (n,t,s,d)=>`<div class="blk"><span class="tag ${t}">${s}</span><b>${n}</b><div class="small">${d}</div></div>`;
+const C = {
+ sum:`<div class="blk"><div class="small">臉形推估</div><b style="font-size:20px">木形人</b><div>臉長，比例偏瘦。</div></div><div class="blk">五官 2 合格・2 不合格・1 沒判<br>三停差不多長<br>十二宮判了 4 宮</div>`,
+ guan:`<div class="card">${row("眉毛","ok","合格","眉尾比眼尾長出去")}${row("眼睛","bad","不合格","眼睛不夠細長")}${row("鼻子","ok","合格","鼻樑直，印堂夠寬")}${row("嘴巴","bad","不合格","嘴唇偏薄")}${row("耳朵","na","沒判","耳朵不在臉部網格裡")}</div><p class="small">沒判的不算合格，也不算不合格。</p>`,
+ ting:`<div class="card">${row("上停・管初年","na","接近平均","額頭：髮際到眉心")}${row("中停・管中年","na","偏短","眉心到鼻子底")}${row("下停・管晚年","na","接近平均","鼻子底到下巴")}<div class="blk quote">三停平等，一生衣祿無虧。</div></div>`,
+ gong:`<div class="card">${[["錢財","ok","合格","財帛宮・鼻子"],["整體運勢","ok","合格","命宮・兩眉中間"],["兄弟朋友","ok","合格","兄弟宮・兩道眉毛"],["整體格局","ok","合格","相貌宮・整張臉"],["感情婚姻","na","沒判","妻妾宮・眼尾兩側"],["工作事業","na","沒判","官祿宮・額頭正中間"],["子女","na","沒判","男女宮・眼睛下面"],["房子家產","na","沒判","田宅宮・兩隻眼睛"],["出外搬家","na","沒判","遷移宮・額頭兩側"],["下屬團隊","na","沒判","奴僕宮・下巴"],["福氣","na","沒判","福德宮・額頭兩側到下巴"],["健康","na","沒判","這個工具不判斷健康"]].map(x=>row(...x)).join("")}</div>`,
+ ask:`<div class="card"><div class="blk"><div class="small">今年的流年・虛歲 35</div><b>太陽</b><div>兩隻眼睛</div></div></div><div class="card"><div class="blk small">想問什麼？只根據這份報告回答，每句標依據。</div></div>`,
+ more:`<div class="card"><div class="blk">其他古書條文<span class="small" style="float:right">2 條</span></div><div class="blk">這次沒看的<span class="small" style="float:right">6 項</span></div><div class="blk">數字明細<span class="small" style="float:right">18 項</span></div></div>`
+};
+document.querySelectorAll("[data-face]").forEach(e=>e.innerHTML=face());
+document.querySelectorAll("[data-c]").forEach(e=>e.innerHTML=C[e.dataset.c]);
+const pills=(root,list,fn)=>{const p=root.querySelector(".pills");p.innerHTML=list.map(([k,i,n])=>`<button data-k="${k}"><b>${i}</b>${n}</button>`).join("");p.onclick=e=>{const b=e.target.closest("button");if(b)fn(b.dataset.k)};return k=>p.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.k===k))};
+// A
+(()=>{const r=document.getElementById("A"),s=r.querySelector(".sheet"),sc=r.querySelector(".scroll");
+ const N={guan:"五官",ting:"三停",gong:"十二宮",ask:"問古書",more:"更多"};
+ const light=k=>r.querySelectorAll("svg .g").forEach(g=>{const all=!["guan","ting","gong"].includes(k);g.style.opacity=all?(g.dataset.g==="gong"?0:1):(g.dataset.g===k?1:(g.dataset.g==="gong"?0:.12))});
+ const mark=pills(r,[["guan","◉","五官"],["ting","≡","三停"],["gong","▦","十二宮"],["ask","❝","問古書"],["more","⋯","更多"]],open);
+ function open(k){s.classList.remove("full");s.querySelector("strong").textContent=N[k];s.querySelector(".inner").innerHTML=C[k];s.querySelector(".inner").scrollTop=0;s.classList.add("open");sc.scrollTo({top:0,behavior:"smooth"});light(k);mark(k)}
+ function close(){s.classList.remove("open","full");s.style.transform="";light();mark()}
+ s.querySelector("button").onclick=close;
+ const g=s.querySelector(".grab");let y0=null,dy=0;
+ g.onpointerdown=e=>{if(e.target.tagName==="BUTTON")return;y0=e.clientY;dy=0;g.setPointerCapture(e.pointerId);s.style.transition="none"};
+ g.onpointermove=e=>{if(y0===null)return;dy=e.clientY-y0;s.style.transform=`translateY(${dy>0?dy:dy/4}px)`};
+ g.onpointerup=g.onpointercancel=()=>{if(y0===null)return;y0=null;s.style.transition="";s.style.transform="";if(dy<-40)s.classList.add("full");else if(dy>90){s.classList.contains("full")?s.classList.remove("full"):close()}};
+ sc.onclick=()=>s.classList.contains("open")&&close();light()})();
+// B
+(()=>{const r=document.getElementById("B"),sc=r.querySelector(".scroll");
+ const T={sum:`<div class="title">你的報告</div><div class="meta">2026年11月24日</div><div class="card">${face()}</div><div class="card">${C.sum}</div>${C.more}`,guan:`<div class="title">五官</div><div class="meta">古書的五官：耳、眉、眼、鼻、口</div>${C.guan}`,ting:`<div class="title">三停</div><div class="meta">臉從上到下三段</div>${C.ting}`,gong:`<div class="title">十二宮</div><div class="meta">判了 4 宮</div>${C.gong}`,ask:`<div class="title">問古書</div><div class="meta">只根據這份報告回答</div>${C.ask}`};
+ const go=k=>{sc.innerHTML=T[k];sc.scrollTop=0;mark(k)};
+ const mark=pills(r,[["sum","⌂","總覽"],["guan","◉","五官"],["ting","≡","三停"],["gong","▦","十二宮"],["ask","❝","問古書"]],go);go("sum")})();
+</script>
+</body>
+</html>
