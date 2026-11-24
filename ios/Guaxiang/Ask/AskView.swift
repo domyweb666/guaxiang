@@ -4,7 +4,10 @@ import SwiftUI
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss
     let report: Report
+    /// 放在報告視窗裡：不自己帶導覽列，輸入列縮成一排，跟切換列排在一起。首頁的 sheet 用預設的 false
+    var embedded = false
 
+    @State private var loaded = false
     @State private var profile = Profile()
     @State private var ageText = ""
     @State private var editing = true
@@ -20,57 +23,71 @@ struct AskView: View {
     private var judge: Judge { Judge(rules: report.rules) }
 
     var body: some View {
-        NavigationStack {
-            Page {
-                Text("先填簡介，再問問題。回答只會根據這次量到的結果和古書條文。")
-                    .foregroundStyle(Theme.secondary)
-                    .padding(.top, 8)
-                liunianCard
-                SectionTitle("簡介")
-                if editing { profileForm } else { profileSummary }
-                Card {
-                    CardBlock(divider: false) {
-                        CheckRow(
-                            title: "我同意把簡介、問題和這次量測結果的文字整理，傳給 AI（Anthropic 的 Claude）產生回答",
-                            detail: "照片和臉部座標不會傳出去。", isOn: $consent)
-                    }
-                }
-                if !AskClient.isReady {
-                    Card {
-                        CardBlock(divider: false) {
-                            Text("問古書還沒開通").font(.headline)
-                            Note("回答要經過一台中繼站，那台還沒架好。架好之前這裡先不能問。")
-                            #if DEVTOOLS
-                                Note("開發測試：到「設定 → 開發工具」貼自己的金鑰就能先試。", warn: true)
-                            #endif
+        Group {
+            if embedded {
+                page
+            } else {
+                NavigationStack {
+                    page
+                        .navigationTitle("問古書")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) { Button("回到報告") { dismiss() } }
                         }
-                    }
                 }
-                SectionTitle("問題")
-                examples
-                ForEach(entries) { entry in answer(entry) }
-                if !entries.isEmpty {
-                    Button("清除問答紀錄") {
-                        entries = []
-                        storage.remove(.chat)
-                    }
-                    .buttonStyle(.ghost)
-                }
-            }
-            .navigationTitle("問古書")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("回到報告") { dismiss() } }
-            }
-            .safeAreaInset(edge: .bottom) { askBar }
-            .alert("提示", isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } })) {
-                Button("好") { alert = nil }
-            } message: {
-                Text(alert ?? "")
             }
         }
         .onAppear(perform: load)
         .onChange(of: consent) { _, value in UserDefaults.standard.set(value, forKey: Storage.Keys.aiConsent) }
+    }
+
+    private var page: some View {
+        Page {
+            Text("先填簡介，再問問題。回答只會根據這次量到的結果和古書條文。")
+                .foregroundStyle(Theme.secondary)
+                .padding(.top, 8)
+            liunianCard
+            SectionTitle("簡介")
+            if editing { profileForm } else { profileSummary }
+            Card {
+                CardBlock(divider: false) {
+                    CheckRow(
+                        title: "我同意把簡介、問題和這次量測結果的文字整理，傳給 AI（Anthropic 的 Claude）產生回答",
+                        detail: "照片和臉部座標不會傳出去。", isOn: $consent)
+                }
+            }
+            if !AskClient.isReady {
+                Card {
+                    CardBlock(divider: false) {
+                        Text("問古書還沒開通").font(.headline)
+                        Note("回答要經過一台中繼站，那台還沒架好。架好之前這裡先不能問。")
+                        #if DEVTOOLS
+                            Note("開發測試：到「設定 → 開發工具」貼自己的金鑰就能先試。", warn: true)
+                        #endif
+                    }
+                }
+            }
+            SectionTitle("問題")
+            examples
+            ForEach(entries) { entry in answer(entry) }
+            if !entries.isEmpty {
+                Button("清除問答紀錄") {
+                    entries = []
+                    storage.remove(.chat)
+                }
+                .buttonStyle(.ghost)
+            }
+        }
+        // 在視窗裡，切換列跟著鍵盤收起來，往下捲就能把鍵盤收掉
+        .scrollDismissesKeyboard(embedded ? .interactively : .automatic)
+        .safeAreaInset(edge: .bottom, spacing: embedded ? 0 : nil) {
+            if embedded { compactBar } else { askBar }
+        }
+        .alert("提示", isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert = nil } })) {
+            Button("好") { alert = nil }
+        } message: {
+            Text(alert ?? "")
+        }
     }
 
     // MARK: 流年
@@ -268,11 +285,51 @@ struct AskView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             Button(busy ? "古書翻閱中…" : "問", action: send)
                 .buttonStyle(.primary)
-                .disabled(busy || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canSend)
             if let left = Paywall.questionsLeft { Note("還可以問 \(left) 題") }
         }
         .padding(.horizontal, Theme.screenMargin)
         .padding(.vertical, 10)
+        .background(Theme.canvas)
+    }
+
+    private var canSend: Bool {
+        !busy && !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 視窗裡的輸入列：半高時位置少，輸入框和送出鈕排成一排
+    private var compactBar: some View {
+        VStack(alignment: .leading, spacing: Theme.tight) {
+            HStack(alignment: .bottom, spacing: Theme.item) {
+                TextField("想問什麼？例如：我今年運勢怎樣？", text: $question, axis: .vertical)
+                    .lineLimit(1...4)
+                    .focused($typing)
+                    .padding(.horizontal, Theme.cardPad)
+                    .padding(.vertical, Theme.rowPadV)
+                    .background(Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+                Button(action: send) {
+                    Group {
+                        if busy {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.up").font(.headline)
+                        }
+                    }
+                    .foregroundStyle(canSend ? Theme.onAccent : Theme.secondary)
+                    .frame(width: Theme.touch, height: Theme.touch)
+                    .background(canSend ? Theme.accent : Theme.separator)
+                    .clipShape(Circle())
+                    .contentShape(Circle())
+                }
+                .buttonStyle(PressStyle())
+                .disabled(!canSend)
+                .accessibilityLabel(busy ? "古書翻閱中" : "問")
+            }
+            if let left = Paywall.questionsLeft { Note("還可以問 \(left) 題") }
+        }
+        .padding(.horizontal, Theme.screenMargin)
+        .padding(.vertical, Theme.item)
         .background(Theme.canvas)
     }
 
@@ -314,6 +371,9 @@ struct AskView: View {
     }
 
     private func load() {
+        // 在視窗裡，從推入的頁面回來會再叫一次，不能蓋掉打到一半的簡介
+        guard !loaded else { return }
+        loaded = true
         if let saved = storage.load(Profile.self, from: .profile) {
             profile = saved
             ageText = saved.age.map { String($0) } ?? ""

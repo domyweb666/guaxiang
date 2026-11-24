@@ -1,7 +1,20 @@
 import SwiftUI
 
-/// 報告的單一區。內容和白話用語照網頁版，只是從一條長捲軸拆成一區一頁
+/// 一區推入頁的樣子：從視窗的總覽往右推進來，標題在視窗最上面那一列
 struct ReportSectionView: View {
+    let section: ReportSection
+    let report: Report
+
+    var body: some View {
+        Page { ReportSectionContent(section: section, report: report) }
+            .navigationTitle(section.title)
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 一區的內容，不含外框。切換列那幾區直接放這個，推入頁也用這個。
+/// 內容和白話用語照網頁版，只是從一條長捲軸拆開
+struct ReportSectionContent: View {
     @EnvironmentObject private var model: AppModel
     let section: ReportSection
     let report: Report
@@ -10,21 +23,34 @@ struct ReportSectionView: View {
     private var m: Measurement { report.measurement }
 
     var body: some View {
-        Page {
-            PageTitle(title: section.title, lead: lead, pushed: true)
+        VStack(alignment: .leading, spacing: Theme.group) {
+            if let lead {
+                Text(lead)
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.tight)
+            }
             if model.isSample { Note("範例報告：數字是假的，不是你的臉。", warn: true).padding(.horizontal, Theme.tight) }
-            switch section {
-            case .wuxing: wuxingSection
-            case .officials: officialsSection
-            case .santing: santingSection
-            case .palaces: palacesSection
-            case .others: othersSection
-            case .cannotSee: cannotSeeSection
-            case .diagram: diagramSection
-            case .numbers: numbers
+            if section.locked {
+                LockedSection(section: section)
+            } else {
+                content
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .padding(.top, Theme.item)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch section {
+        case .wuxing: wuxingSection
+        case .officials: officialsSection
+        case .santing: santingSection
+        case .palaces: palacesSection
+        case .others: othersSection
+        case .cannotSee: cannotSeeSection
+        case .diagram: diagramSection
+        case .numbers: numbers
+        }
     }
 
     private var lead: String? {
@@ -101,6 +127,10 @@ struct ReportSectionView: View {
             Card {
                 CardBlock(divider: false) {
                     HStack(alignment: .firstTextBaseline, spacing: Theme.item) {
+                        if let color = markColor(x.official.id) {
+                            // 跟照片上那一圈同一個顏色
+                            Circle().fill(color).frame(width: Theme.markDot, height: Theme.markDot).accessibilityHidden(true)
+                        }
                         (Text(x.official.plain).font(.title3.weight(.semibold))
                             + Text("・" + x.official.name).font(.subheadline).foregroundColor(Theme.secondary))
                         Spacer()
@@ -134,6 +164,18 @@ struct ReportSectionView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 這一官在照片上是什麼顏色。沒有照片、耳朵沒有標註，就不放色點
+    private func markColor(_ id: String) -> Color? {
+        guard !model.isSample, model.photo != nil else { return nil }
+        switch id {
+        case "guan-brow": return Theme.markBrow
+        case "guan-eye": return Theme.markEye
+        case "guan-nose": return Theme.markNose
+        case "guan-mouth": return Theme.markMouth
+        default: return nil
         }
     }
 
@@ -347,6 +389,23 @@ struct ReportSectionView: View {
             CardBlock {
                 Note("公式裡括號的數字是網頁版的點位編號；iOS 版在臉部網格和照片上取同一個位置。")
                 Note(String(format: "平均光線亮度 %.0f／255・規則庫 %@", m.light, m.rulesVersion))
+            }
+        }
+    }
+}
+
+/// 鎖住的那一區：就地說明完整版有什麼，不從視窗上再疊一層視窗（準則 4-5）。
+/// 現在 Paywall 全開，這一塊不會出現；第 8 步接 StoreKit 時，購買鈕放在這裡
+struct LockedSection: View {
+    let section: ReportSection
+
+    var body: some View {
+        Card {
+            CardBlock(divider: false) {
+                Label("\(section.title)在完整版裡", systemImage: "lock")
+                    .font(.headline)
+                Text("完整版有三停、十二宮、其他古書條文，問古書 \(Paywall.includedQuestions) 題，再掃幾次都會出完整報告。")
+                Note("一次付清，這支 Apple ID 之後都能用。")
             }
         }
     }

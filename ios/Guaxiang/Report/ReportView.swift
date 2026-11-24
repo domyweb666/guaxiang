@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 報告的每一區。總覽一列一區，點進去推入那一區的頁面
+/// 報告的每一區。五官、三停、十二宮在視窗的切換列上，其他從總覽往右推入
 enum ReportSection: String, Hashable, CaseIterable {
     case wuxing, officials, santing, palaces, others, cannotSee, diagram, numbers
 
@@ -52,153 +52,112 @@ extension Report {
     }
 }
 
-/// 報告總覽：古書怎麼說你、問古書、每一區、這次沒看的。設定、匯出、清除都在設定頁，不放這裡（準則 3-3、3-4）
+/// 報告：上半部照片滿版、不捲動，下半部是一直在的懸浮視窗（QC-0006 第 3 筆，多米 2026-11-24 選 A）。
+/// 設定、匯出、清除都在設定頁，不放這裡（準則 3-3、3-4）
 struct ReportView: View {
     @EnvironmentObject private var model: AppModel
     let report: Report
-    @State private var showAsk = false
-    @State private var showPaywall = false
-
-    private var rules: Rules { report.rules }
-    private var m: Measurement { report.measurement }
+    @State private var tab = ReportTab.overview
+    @State private var detent = Theme.windowHalf
+    /// 這一頁在不在畫面上（推入完成到開始返回之間）
+    @State private var pageOn = false
+    @State private var windowUp = false
 
     var body: some View {
-        Page {
-            PageTitle(
-                title: model.isSample ? "範例報告" : "你的報告",
-                lead: model.isSample
-                    ? "數字是假的，不是你的臉。用來看報告長什麼樣。"
-                    : "\(m.when.formatted(date: .long, time: .omitted))・收了 \(m.frames) 張畫面",
-                pushed: true)
-            photoCard
-            if !m.gaps.isEmpty { gaps }
-
-            SectionTitle("古書怎麼說你")
-            summary
-            askCard
-
-            SectionTitle("每一區")
-            Card {
-                ForEach(Array([ReportSection.wuxing, .officials, .santing, .palaces, .others].enumerated()), id: \.offset) {
-                    i, s in
-                    if i > 0 { RowDivider() }
-                    row(s)
-                }
+        GeometryReader { geo in
+            let stage = Stage(size: geo.size, top: geo.safeAreaInsets.top, bottom: geo.safeAreaInsets.bottom)
+            ZStack(alignment: .top) {
+                Theme.canvas
+                top(stage)
+                    .frame(width: stage.fill.size.width, height: stage.fill.size.height)
             }
-
-            SectionTitle("這次沒看的")
-            Card {
-                row(.cannotSee)
-                RowDivider()
-                FlowChips(items: rules.cannotSee.map { "\($0.plain)" })
-                    .padding(.horizontal, Theme.cardPad)
-                    .padding(.vertical, Theme.rowPadV)
-            }
-
-            Card {
-                row(.diagram)
-                RowDivider()
-                row(.numbers)
-            }
-            .padding(.top, Theme.section - Theme.group)
-
-            Note("古書的說法沒有經過科學驗證。報告不判健康、壽命、災禍，也不評價人品，不能用來替你或別人做重大決定。")
-                .padding(.top, Theme.section - Theme.group)
-                .padding(.horizontal, Theme.tight)
+            .ignoresSafeArea()
         }
+        // 鍵盤是視窗裡的事，照片不跟著縮
+        .ignoresSafeArea(.keyboard)
+        .background(
+            PageLifecycle(
+                onShow: {
+                    pageOn = true
+                    windowUp = true
+                },
+                onLeave: {
+                    pageOn = false
+                    windowUp = false
+                }
+            )
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+        )
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showAsk) { AskView(report: report) }
-        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .sheet(isPresented: $windowUp, onDismiss: reopen) {
+            ReportWindow(report: report, tab: $tab, detent: $detent)
+                .presentationDetents([Theme.windowHalf, .large], selection: $detent)
+                .presentationBackgroundInteraction(.enabled(upThrough: Theme.windowHalf))
+                // 捲內容就是捲內容，要拉高拉低拖上面的橫條和標題列
+                .presentationContentInteraction(.scrolls)
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(Theme.windowRadius)
+                .presentationBackground(Theme.canvas)
+                .interactiveDismissDisabled()
+        }
     }
 
-    /// 最上面：這次掃的照片，標出量測的位置（QC-0006 第 2 筆）
-    @ViewBuilder private var photoCard: some View {
+    /// 還在這一頁，視窗卻被系統收掉：再升起來，不然這一頁就沒東西可看
+    private func reopen() {
+        if pageOn { windowUp = true }
+    }
+
+    /// 上半部：這次掃的照片。範例放示意圖，舊報告沒有照片就說明
+    @ViewBuilder private func top(_ stage: Stage) -> some View {
         if model.isSample {
-            Card {
-                FaceSketch()
-                    .frame(maxWidth: Theme.sketchWidth)
-                    .frame(maxWidth: .infinity)
-                    .padding(Theme.cardPad)
+            VStack(spacing: Theme.item) {
+                FaceSketch().frame(maxWidth: Theme.sketchWidth)
+                Note("範例沒有照片，這張是示意圖。")
             }
+            .modifier(Clear(stage: stage))
         } else if let photo = model.photo {
-            AnnotatedPhoto(photo: photo)
+            AnnotatedPhoto(photo: photo, mode: tab.mode, palaces: report.palaces, fill: stage.fill)
+                .overlay(alignment: .top) {
+                    LinearGradient(
+                        colors: [Theme.canvas.opacity(Theme.scrimOpacity), Theme.canvas.opacity(0)], startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: stage.fill.top)
+                    .allowsHitTesting(false)
+                }
         } else {
-            Note("這份報告是之前的版本掃的，沒有留照片。再掃一次，照片和標註會放在這裡。").padding(.horizontal, Theme.tight)
+            Note("這份報告是之前的版本掃的，沒有留照片。再掃一次，照片和標註會放在這裡。")
+                .multilineTextAlignment(.center)
+                .modifier(Clear(stage: stage))
         }
     }
 
-    private func value(_ s: ReportSection) -> String? {
-        switch s {
-        case .wuxing: return report.wuxing.map { "\($0.host)形" } ?? "沒判"
-        case .officials:
-            return "\(report.count(.pass)) 合格・\(report.count(.fail)) 不合格・\(report.count(.unjudged)) 沒判"
-        case .santing: return report.santingShort
-        case .palaces: return "判了 \(report.judgedPalaces) 宮"
-        case .others: return report.others.isEmpty ? "沒有對到" : "\(report.others.count) 條"
-        case .cannotSee: return "\(rules.cannotSee.count) 項"
-        case .diagram: return nil
-        case .numbers: return "\(report.measuredCount) 項"
+    /// 放在返回列以下、視窗以上的那一段中間
+    private struct Clear: ViewModifier {
+        let stage: Stage
+
+        func body(content: Content) -> some View {
+            content
+                .padding(.horizontal, Theme.screenMargin)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, stage.fill.top)
+                .padding(.bottom, stage.fill.bottom)
         }
     }
 
-    private func row(_ s: ReportSection) -> some View {
-        Button {
-            if s.locked { showPaywall = true } else { model.open(s) }
-        } label: {
-            ReportRow(title: s.title, value: value(s), locked: s.locked)
-        }
-        .buttonStyle(.plain)
-    }
+    /// 上半部有多大。視窗半高是「螢幕扣掉狀態列和底部之後的一半，再加底部」，照這個估視窗的上緣
+    private struct Stage {
+        let fill: AnnotatedPhoto.Fill
 
-    private var summary: some View {
-        Card {
-            ForEach(Array(report.summaryPoints.enumerated()), id: \.offset) { i, p in
-                CardBlock(divider: i > 0) {
-                    (Text(p.title).bold() + Text(p.body.isEmpty ? "" : "：" + p.body))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            if !report.unstableNames.isEmpty {
-                CardBlock {
-                    Note(
-                        "有幾項在 \(m.frames) 張畫面之間差很多，結果只當參考：\(report.unstableNames.joined(separator: "、"))。",
-                        warn: true)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private var askCard: some View {
-        if model.isSample {
-            Note("範例報告不能問古書。掃過自己的臉之後就能問。").padding(.horizontal, Theme.tight)
-        } else {
-            Button { showAsk = true } label: {
-                HStack(spacing: Theme.group) {
-                    Image(systemName: "bubble.left").font(.title3)
-                    VStack(alignment: .leading, spacing: Theme.tight / 2) {
-                        Text("問古書").font(.headline)
-                        Text("只根據這份報告回答，每句標依據").font(.footnote)
-                    }
-                    Spacer()
-                    if let left = Paywall.questionsLeft { Text("還能問 \(left) 題").font(.subheadline) }
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
-                }
-                .foregroundStyle(Theme.onAccent)
-                .padding(Theme.cardPad)
-                .background(Theme.accent)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-            }
-            .buttonStyle(PressStyle())
-        }
-    }
-
-    private var gaps: some View {
-        Card {
-            CardBlock(divider: false) {
-                Text("這次量不到的").font(.headline)
-                ForEach(m.gaps, id: \.self) { Note($0, warn: true) }
-                Note("量不到的項目一律寫「沒判」，沒有拿別的數字湊。")
-            }
+        init(size: CGSize, top: CGFloat, bottom: CGFloat) {
+            let full = size.height + top + bottom
+            let statusBar = max(0, top - Theme.touch)
+            let windowTop = full - (max(0, full - statusBar - bottom) * Theme.windowFraction + bottom)
+            fill = AnnotatedPhoto.Fill(
+                size: CGSize(width: size.width, height: max(1, windowTop + Theme.windowOverlap)), top: top,
+                bottom: Theme.windowOverlap + Theme.group)
         }
     }
 }

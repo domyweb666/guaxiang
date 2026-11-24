@@ -42,7 +42,12 @@ enum Theme {
     static let markLine = fixed(0xFFB224)
     /// 壓在 markLine 上的字
     static let markLineText = fixed(0x2A1A00)
+    /// 十二宮判得到的那幾宮（跟淺色主色同一個朱紅，白字 5.9:1）
+    static let markPalace = fixed(0xB33A2B)
+    /// 照片上小標籤的深色底
+    static let markShade = Color.black.opacity(0.55)
     static let markWidth: CGFloat = 2
+    static let markDot: CGFloat = 10
 
     // MARK: 間距用途名（domy-design layout，準則 3-46）
 
@@ -73,6 +78,17 @@ enum Theme {
     static let emptyIcon: CGFloat = 64
     static let hairline: CGFloat = 1
     static let sketchWidth: CGFloat = 180
+
+    // MARK: 報告的懸浮視窗
+
+    /// 半高：約佔下半
+    static let windowFraction: CGFloat = 0.5
+    static let windowHalf = PresentationDetent.fraction(windowFraction)
+    static let windowRadius: CGFloat = 36
+    /// 照片往視窗底下多鋪一段：圓角兩旁和 iOS 26 縮進去的地方才不會露底
+    static let windowOverlap: CGFloat = 64
+    /// 照片最上面那層淡底，返回鈕和狀態列才看得清楚
+    static let scrimOpacity: Double = 0.6
 
     // MARK: 動作（附錄 E 步驟 4）
 

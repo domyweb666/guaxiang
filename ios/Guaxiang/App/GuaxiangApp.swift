@@ -18,7 +18,6 @@ struct GuaxiangApp: App {
 /// 推入的每一頁。用系統的推入和返回，左緣滑回能用（附錄 E 第 2 項）
 enum Route: Hashable {
     case consent, scan, hairline, report
-    case section(ReportSection)
 }
 
 /// 整個 app 的狀態：現在推到哪幾頁、手上的報告
@@ -80,8 +79,9 @@ final class AppModel: ObservableObject {
         path = [.report]
     }
 
-    func open(_ section: ReportSection) {
-        path.append(.section(section))
+    /// 從報告回上一頁（旁白的返回手勢用）
+    func closeReport() {
+        if path.last == .report { path.removeLast() }
     }
 
     func scanFinished(_ result: ScanCapture) {
@@ -165,8 +165,6 @@ struct RootView: View {
                 case .hairline: HairlineView()
                 case .report:
                     if let report = model.report { ReportView(report: report) }
-                case .section(let s):
-                    if let report = model.report { ReportSectionView(section: s, report: report) }
                 }
             }
         }
