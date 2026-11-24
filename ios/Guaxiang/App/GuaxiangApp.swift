@@ -174,6 +174,7 @@ struct RootView: View {
 /// 主畫面。沒掃過：示意圖＋三個承諾＋「開始掃描」。掃過：上一次報告的摘要放最上面（HANDOFF 4-5）
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showSettings = false
     @State private var showAsk = false
 
@@ -263,7 +264,12 @@ struct HomeView: View {
     }
 
     private func savedCard(_ r: Report) -> some View {
-        Button { model.openSaved() } label: {
+        // 字再大，三格並排就放不下「三段差不多長」
+        let stats =
+            typeSize >= .xxLarge
+            ? AnyLayout(VStackLayout(spacing: Theme.item))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Theme.item))
+        return Button { model.openSaved() } label: {
             VStack(alignment: .leading, spacing: Theme.cardPad) {
                 HStack(alignment: .firstTextBaseline) {
                     Note(r.measurement.when.formatted(date: .long, time: .omitted) + "掃的")
@@ -285,13 +291,14 @@ struct HomeView: View {
                         }
                     }
                 }
-                HStack(spacing: Theme.item) {
+                stats {
                     stat(
                         "五官", VerdictShort.lead(r.officialTally, "項"), VerdictShort.rest(r.officialTally, "項"))
                     stat("三段", r.santingShort, [r.santingLife])
                     stat(
                         "十二件事", VerdictShort.lead(r.palaceTally, "件"), VerdictShort.rest(r.palaceTally, "件"))
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(Color.primary)
             .padding(Theme.cardPad)
@@ -312,7 +319,8 @@ struct HomeView: View {
     private func stat(_ title: String, _ value: String, _ sub: [String]) -> some View {
         VStack(alignment: .leading, spacing: Theme.tight / 2) {
             Text(title).font(.caption).foregroundStyle(Theme.secondary)
-            Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            Text(value).font(.subheadline.weight(.semibold))
+                .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.leading)
             ViewThatFits(in: .horizontal) {
                 Text(sub.joined(separator: "・")).lineLimit(1)
                 Text(sub.joined(separator: "・\n")).fixedSize(horizontal: false, vertical: true)
@@ -320,7 +328,7 @@ struct HomeView: View {
             .font(.caption)
             .foregroundStyle(Theme.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, Theme.group)
         .padding(.vertical, Theme.item)
         .background(Theme.canvas)

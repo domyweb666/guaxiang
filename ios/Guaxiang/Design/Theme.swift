@@ -243,7 +243,10 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
+            // 字放到最大時換行，不截字。寫在 frame 後面，空間不夠時按鈕也不會被壓扁
+            .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, minHeight: height)
+            .fixedSize(horizontal: false, vertical: true)
             .foregroundStyle(foreground)
             .background(background)
             .clipShape(Capsule())

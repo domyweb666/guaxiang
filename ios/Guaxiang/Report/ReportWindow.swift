@@ -242,8 +242,9 @@ struct ReportWindow: View {
 
     /// 五官、三段、十二件事的摘要格，點了切到那一區
     private var cells: some View {
+        // 字再大，三格並排就放不下「三段差不多長」
         let layout =
-            typeSize.isAccessibilitySize
+            typeSize >= .xxLarge
             ? AnyLayout(VStackLayout(spacing: Theme.item))
             : AnyLayout(HStackLayout(alignment: .top, spacing: Theme.item))
         return layout {
@@ -268,7 +269,7 @@ struct ReportWindow: View {
                     if t.locked { Image(systemName: "lock").font(.caption).foregroundStyle(Theme.bad) }
                 }
                 Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.leading)
                 ViewThatFits(in: .horizontal) {
                     Text(sub.joined(separator: "・")).lineLimit(1)
                     Text(sub.joined(separator: "・\n"))
@@ -336,6 +337,8 @@ struct ReportTabBar: View {
                         .foregroundStyle(t == selected ? Theme.accent : Theme.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        // 字不要貼到淡底的邊
+                        .padding(.horizontal, Theme.tight / 2)
                         .frame(maxWidth: .infinity, minHeight: Theme.touch)
                         .background(t == selected ? Theme.accentSoft : Color.clear)
                         .clipShape(Capsule())
