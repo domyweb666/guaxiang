@@ -303,8 +303,8 @@ struct AskView: View {
             case .text(let text):
                 out += AttributedString(text)
             case .cite(let id):
-                // 不斷行空格，標籤不會被拆成兩行
-                var tag = AttributedString("\u{00A0}依據\u{00A0}\(id.dropFirst())\u{00A0}")
+                // 不斷行空格和字元連接符（U+2060），標籤不會被拆成兩行
+                var tag = AttributedString("\u{00A0}依\u{2060}據\u{00A0}\(id.dropFirst())\u{00A0}")
                 tag.link = URL(string: "guaxiang-cite:///\(id)")
                 tag.foregroundColor = Theme.accent
                 tag.font = .caption

@@ -14,6 +14,8 @@ struct InfoButton: View {
         } label: {
             Image(systemName: "info.circle")
                 .font(.body)
+                // 再大會超出 44 的框、凸出卡片
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .foregroundStyle(Theme.secondary)
                 .frame(width: Theme.touch, height: Theme.touch)
                 .contentShape(Rectangle())
