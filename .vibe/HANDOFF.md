@@ -25,9 +25,9 @@
 - 真臉：量測點、照片標註、視窗手感都要多米在手機看。模擬器拿不到 ARKit 網格，別再試
 - iOS 17／18、真的小螢幕手機、旁白沒跑過
 - 設定 → 開發工具 → 開範例報告：按完只退回設定清單，要再按「完成」（`DevToolsView.swift:18`，舊問題，沒動）
-- `project.yml` 沒有 `CADisableMinimumFrameDurationOnPhone`（120Hz），茄記、番茄帳都踩過，問過多米再加
+- `project.yml` 沒有 `CADisableMinimumFrameDurationOnPhone`（120Hz），茄記、番茄帳都踩過，已跟多米提過、還沒回，tf-3 沒帶
 
 ## ⏭️ 下一步從哪繼續
 
-1. 多米說要打包才打，下一個 tag 是 `tf-3`
+1. `tf-3` 已打（`da65fed`，0.1.0 (3)，2026-11-24 上傳成功）。多米說要打包才打，下一個 tag 是 `tf-4`
 2. 多米看過真機後，照回報改；先 `git log --oneline -3` 確認沒有別的 session 改過
