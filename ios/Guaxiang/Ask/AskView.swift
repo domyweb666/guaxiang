@@ -301,7 +301,8 @@ struct AskView: View {
     private var compactBar: some View {
         VStack(alignment: .leading, spacing: Theme.tight) {
             HStack(alignment: .bottom, spacing: Theme.item) {
-                TextField("想問什麼？例如：我今年運勢怎樣？", text: $question, axis: .vertical)
+                // 位置窄，提示字要短：最大字級配最窄的手機也放得下
+                TextField("想問什麼", text: $question, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($typing)
                     .padding(.horizontal, Theme.cardPad)
@@ -313,7 +314,7 @@ struct AskView: View {
                         if busy {
                             ProgressView()
                         } else {
-                            Image(systemName: "arrow.up").font(.headline)
+                            Image(systemName: "arrow.up").font(.system(size: Theme.touchIcon, weight: .semibold))
                         }
                     }
                     .foregroundStyle(canSend ? Theme.onAccent : Theme.secondary)

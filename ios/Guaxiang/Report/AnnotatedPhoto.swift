@@ -14,8 +14,10 @@ struct AnnotatedPhoto: View {
         var size: CGSize
         /// 返回鈕和瀏海那一段
         var top: CGFloat
-        /// 被視窗蓋住的那一段
+        /// 從螢幕底往上，被視窗蓋住的那一段（含貼著視窗上緣留的一點空）
         var bottom: CGFloat
+        /// 從最上面算起，照片本身至少要鋪到這裡。再往下照片不夠長，就用最後一排的顏色接到底
+        var cover: CGFloat
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +25,8 @@ struct AnnotatedPhoto: View {
     var mode: Mode = .overview
     var palaces: [PalaceResult] = []
     var fill: Fill?
+    /// 標籤畫在 Canvas 裡，字的大小自己算好再給，不靠 Canvas 解析字型時看不看字級
+    @ScaledMetric(relativeTo: .caption) var tagText: CGFloat = Theme.markText
 
     var body: some View {
         if let fill {
@@ -63,7 +67,8 @@ struct AnnotatedPhoto: View {
     private func marks(_ kind: MarkLayer.Kind, _ crop: CGRect) -> MarkLayer {
         MarkLayer(
             kind: kind, marks: photo.marks, image: photo.image.size, crop: crop,
-            palaces: kind == .palaces ? palaces : [])
+            palaces: kind == .palaces ? palaces : [], textSize: min(tagText, Theme.markTextMax), top: fill?.top ?? 0,
+            bottom: fill?.bottom ?? 0)
     }
 
     private var label: String {
@@ -127,7 +132,8 @@ struct AnnotatedPhoto: View {
         return cut.isNull || cut.width < 1 || cut.height < 1 ? full : cut
     }
 
-    /// 滿版用法：臉放在沒被蓋住的那一段，再補成畫面的長寬比。照片不夠大就縮到照片範圍內
+    /// 滿版用法：臉放在沒被蓋住的那一段，左右鋪滿，往下至少鋪到 cover。
+    /// 畫面再高也不放大照片，所以回傳的範圍可能超出照片下緣，超出的部分由 PhotoLayer 接
     static func crop(_ photo: FacePhoto, fill: Fill) -> CGRect {
         let full = CGRect(origin: .zero, size: photo.image.size)
         let size = fill.size
@@ -136,16 +142,18 @@ struct AnnotatedPhoto: View {
         let clear = max(1, size.height - fill.top - fill.bottom)
         // 照片一個像素在畫面上畫多大
         let wanted = min(size.width / face.width, clear / face.height)
-        let scale = max(wanted, size.width / full.width, size.height / full.height)
+        let cover = min(max(1, fill.cover), size.height)
+        let scale = max(wanted, size.width / full.width, cover / full.height)
         let w = size.width / scale, h = size.height / scale
         let x = face.midX - w / 2
         let y = face.midY - (fill.top + clear / 2) / scale
         return CGRect(
-            x: min(max(0, x), max(0, full.width - w)), y: min(max(0, y), max(0, full.height - h)), width: w, height: h)
+            x: min(max(0, x), max(0, full.width - w)), y: min(max(0, y), max(0, full.height - cover / scale)), width: w,
+            height: h)
     }
 }
 
-/// 照片那一層：裁到 crop 的範圍，左右相反
+/// 照片那一層：裁到 crop 的範圍，左右相反。照片下面不夠的地方，把最後幾排像素往下拉到底，接縫才看不出來
 private struct PhotoLayer: View {
     let image: UIImage
     let crop: CGRect
@@ -156,12 +164,26 @@ private struct PhotoLayer: View {
             var flipped = context
             flipped.translateBy(x: size.width, y: 0)
             flipped.scaleBy(x: -1, y: 1)
-            flipped.draw(
-                Image(uiImage: image),
-                in: CGRect(
-                    x: -crop.minX * scale, y: -crop.minY * scale, width: image.size.width * scale,
-                    height: image.size.height * scale))
+            let frame = CGRect(
+                x: -crop.minX * scale, y: -crop.minY * scale, width: image.size.width * scale,
+                height: image.size.height * scale)
+            let gap = size.height - frame.maxY
+            if gap > 0, let rows = lastRows {
+                // 上下各多畫一段：上面被照片蓋住，下面在畫面外，邊緣變淡也看不到
+                flipped.draw(
+                    Image(uiImage: rows),
+                    in: CGRect(x: frame.minX, y: frame.maxY - gap, width: frame.width, height: gap * 3))
+            }
+            flipped.draw(Image(uiImage: image), in: frame)
         }
+    }
+
+    /// 照片最下面幾排
+    private var lastRows: UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let count = min(4, cg.height)
+        return cg.cropping(to: CGRect(x: 0, y: cg.height - count, width: cg.width, height: count))
+            .map { UIImage(cgImage: $0) }
     }
 }
 
@@ -180,6 +202,11 @@ private struct MarkLayer: View {
     let image: CGSize
     let crop: CGRect
     let palaces: [PalaceResult]
+    /// 標籤的字多大
+    let textSize: CGFloat
+    /// 上下被返回列和視窗蓋住的高度，十二宮的標籤不放進去
+    let top: CGFloat
+    let bottom: CGFloat
 
     var body: some View {
         Canvas { context, size in
@@ -262,34 +289,119 @@ private struct MarkLayer: View {
 
     /// 判得到的宮畫朱紅小標籤寫宮名，其他宮畫白色小圓點
     private func drawPalaces(_ context: GraphicsContext, _ size: CGSize) {
-        var judged: [(name: String, spots: [CGPoint])] = []
+        var all: [PalaceMark] = []
         for x in palaces {
-            let spots = palaceSpots(x.id, size)
+            let spots = palaceSpots(x.id, size).sorted { $0.x < $1.x }
             guard !spots.isEmpty else { continue }
-            if x.status == .unjudged {
-                for p in spots { dot(context, p, Color.white, edge: Theme.markShade) }
-            } else {
-                judged.append((name: x.palace.name, spots: spots))
-            }
+            all.append(PalaceMark(name: x.status == .unjudged ? nil : x.palace.name, spots: spots))
         }
+        let face = featureBoxes(size)
         var taken: [CGRect] = []
-        for item in judged {
-            let spots = item.spots.sorted { $0.x < $1.x }
-            for p in spots { dot(context, p, Theme.markPalace, edge: Color.white) }
-            guard let anchor = spots.first else { continue }
-            let text = label(context, item.name, color: .white)
-            var box = tagBox(text, at: anchor, anchor: .center)
-            // 一左一右的宮，標籤寫在左邊那個點的外側，不擠到臉中間
-            if spots.count > 1 { box.origin.x = anchor.x + Theme.item - box.width }
-            box.origin.x = min(max(Theme.tight, box.minX), max(Theme.tight, size.width - box.width - Theme.tight))
-            // 疊到別的標籤就往下挪，最多三次
-            for _ in 0..<3 {
-                guard let hit = taken.first(where: { $0.intersects(box) }) else { break }
-                box.origin.y = hit.maxY + Theme.tight / 2
+        for (i, mark) in all.enumerated() {
+            guard let name = mark.name, let anchor = mark.spots.first else { continue }
+            var avoid: [Obstacle] = face.map { Obstacle(box: $0, weight: 1) }
+            for (j, other) in all.enumerated() {
+                let weight: CGFloat = j == i ? 20 : 2
+                for p in other.spots { avoid.append(Obstacle(box: dotBox(p), weight: weight)) }
             }
+            for box in taken { avoid.append(Obstacle(box: box, weight: 20)) }
+            let text = label(context, name, color: .white)
+            let box = palaceTag(text, for: mark.spots, avoid: avoid, size: size)
             taken.append(box)
+            lead(context, from: anchor, to: box)
             paint(context, text, in: box, fill: Theme.markPalace)
         }
+        // 點最後畫，標籤再怎麼擠都蓋不到點
+        for mark in all {
+            let judged = mark.name != nil
+            for p in mark.spots {
+                dot(context, p, judged ? Theme.markPalace : Color.white, edge: judged ? Color.white : Theme.markShade)
+            }
+        }
+    }
+
+    /// 一宮：沒判的沒有名字。位置由左到右排
+    private struct PalaceMark {
+        let name: String?
+        let spots: [CGPoint]
+    }
+
+    /// 標籤要閃開的地方，疊到一平方點扣 weight 分
+    private struct Obstacle {
+        let box: CGRect
+        let weight: CGFloat
+    }
+
+    /// 眉、眼、鼻、嘴在畫面上的範圍。鼻翼沒有量測點，寬度照兩眼之間的距離估
+    private func featureBoxes(_ size: CGSize) -> [CGRect] {
+        let eyes = marks.eyes.compactMap { bounds(place($0, size)) }
+        var boxes = marks.brows.compactMap { bounds(place($0, size)) } + eyes
+        if let lips = bounds(place(marks.lips, size)) { boxes.append(lips) }
+        let line: [LM] = [.noseRoot, .noseBridge2, .noseTip, .subnasale]
+        if var nose = bounds(line.compactMap { place($0, size) }) {
+            if eyes.count == 2 {
+                let gap = max(eyes[0].minX, eyes[1].minX) - min(eyes[0].maxX, eyes[1].maxX)
+                nose = nose.insetBy(dx: -max(0, gap * 0.8 - nose.width) / 2, dy: 0)
+            }
+            boxes.append(nose)
+        }
+        return boxes
+    }
+
+    /// 標籤放在點旁邊的哪裡：往幾個方向、由近到遠試，挑疊到最少又離點最近的。
+    /// 一左一右的宮跟著左邊那個點，只往上和外側放，不擠到臉中間
+    private func palaceTag(
+        _ text: GraphicsContext.ResolvedText, for spots: [CGPoint], avoid: [Obstacle], size: CGSize
+    ) -> CGRect {
+        let anchor = spots.first ?? .zero
+        let start = tagBox(text, at: anchor, anchor: .center)
+        let up = CGVector(dx: 0, dy: -1), down = CGVector(dx: 0, dy: 1)
+        let left = CGVector(dx: -1, dy: 0), right = CGVector(dx: 1, dy: 0)
+        let upLeft = CGVector(dx: -1, dy: -1), upRight = CGVector(dx: 1, dy: -1)
+        let directions: [CGVector] =
+            spots.count > 1 ? [up, left, upLeft, down] : [up, right, left, upRight, upLeft, down]
+        let area = CGRect(
+            x: Theme.tight, y: top + Theme.tight, width: size.width - Theme.tight * 2,
+            height: size.height - top - bottom - Theme.tight * 2)
+        var best = start
+        var bestCost = CGFloat.greatestFiniteMagnitude
+        for (order, direction) in directions.enumerated() {
+            for step in 0..<8 {
+                let gap = Theme.tight / 2 + CGFloat(step) * Theme.item
+                let reach = Theme.markDot / 2 + gap
+                let dx = direction.dx * (start.width / 2 + reach)
+                let dy = direction.dy * (start.height / 2 + reach)
+                let box = keep(start.offsetBy(dx: dx, dy: dy), inside: area)
+                var cost: CGFloat = gap * 8 + CGFloat(order) * 6
+                for o in avoid { cost += overlap(box, o.box) * o.weight }
+                if cost < bestCost {
+                    bestCost = cost
+                    best = box
+                }
+            }
+        }
+        return best
+    }
+
+    private func keep(_ box: CGRect, inside area: CGRect) -> CGRect {
+        let x = min(max(area.minX, box.minX), max(area.minX, area.maxX - box.width))
+        let y = min(max(area.minY, box.minY), max(area.minY, area.maxY - box.height))
+        return CGRect(x: x, y: y, width: box.width, height: box.height)
+    }
+
+    private func overlap(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let hit = a.intersection(b)
+        return hit.isNull ? 0 : hit.width * hit.height
+    }
+
+    /// 標籤離點有一段距離時，拉一條細線連起來，才看得出是誰的
+    private func lead(_ context: GraphicsContext, from p: CGPoint, to box: CGRect) {
+        let end = CGPoint(x: min(max(p.x, box.minX), box.maxX), y: min(max(p.y, box.minY), box.maxY))
+        guard hypot(end.x - p.x, end.y - p.y) > Theme.markDot else { return }
+        var path = Path()
+        path.move(to: p)
+        path.addLine(to: end)
+        context.stroke(path, with: .color(Theme.markPalace), lineWidth: Theme.hairline)
     }
 
     /// 每一宮在畫面上的位置。量不到那個點就不畫
@@ -302,7 +414,8 @@ private struct MarkLayer: View {
         case "xiongdi":
             return marks.brows.compactMap { bounds(place($0, size)) }.map { CGPoint(x: $0.midX, y: $0.midY) }
         case "tianzhai":
-            return eyes.map { CGPoint(x: $0.midX, y: $0.midY) }
+            // 規則庫只寫「兩隻眼睛」。點放在上眼瞼上方一點，不壓在瞳孔上
+            return eyes.map { CGPoint(x: $0.midX, y: $0.minY - Theme.item) }
         case "nannv":
             return eyes.map { CGPoint(x: $0.midX, y: $0.maxY + $0.width * 0.35) }
         case "qiqie":
@@ -332,9 +445,13 @@ private struct MarkLayer: View {
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
-    private func dot(_ context: GraphicsContext, _ p: CGPoint, _ color: Color, edge: Color) {
+    private func dotBox(_ p: CGPoint) -> CGRect {
         let r = Theme.markDot / 2
-        let path = Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
+        return CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+    }
+
+    private func dot(_ context: GraphicsContext, _ p: CGPoint, _ color: Color, edge: Color) {
+        let path = Path(ellipseIn: dotBox(p))
         context.fill(path, with: .color(color))
         context.stroke(path, with: .color(edge), lineWidth: Theme.hairline)
     }
@@ -342,7 +459,8 @@ private struct MarkLayer: View {
     // MARK: 照片上的小標籤：壓一塊底色，照片亮或暗都看得到字
 
     private func label(_ context: GraphicsContext, _ text: String, color: Color) -> GraphicsContext.ResolvedText {
-        context.resolve(Text(text).font(.caption.weight(.semibold)).foregroundColor(color))
+        // 固定大小的字型不會再跟著字級放大，上限在 textSize 就算好了
+        context.resolve(Text(text).font(.system(size: textSize, weight: .semibold)).foregroundColor(color))
     }
 
     private func tagBox(_ text: GraphicsContext.ResolvedText, at p: CGPoint, anchor: UnitPoint) -> CGRect {

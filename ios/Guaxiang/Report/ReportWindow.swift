@@ -48,6 +48,8 @@ struct ReportWindow: View {
     let report: Report
     @Binding var tab: ReportTab
     @Binding var detent: PresentationDetent
+    /// 有沒有推入的頁，給外層決定要不要停掉左緣返回
+    @Binding var pushed: Bool
     @State private var path: [ReportSection] = []
     /// 看過的區留著，切回來捲到哪裡、打了什麼字都還在
     @State private var visited: Set<ReportTab> = []
@@ -79,6 +81,7 @@ struct ReportWindow: View {
             }
         }
         .background(Theme.canvas.ignoresSafeArea())
+        .onChange(of: path.isEmpty) { _, empty in pushed = !empty }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             keyboard(true)
         }
@@ -219,16 +222,17 @@ struct ReportWindow: View {
         return layout {
             cell(
                 .officials, "\(report.count(.pass)) 合格",
-                "\(report.count(.fail)) 不合格・\(report.count(.unjudged)) 沒判")
-            cell(.santing, report.santingShort, report.santingLife)
+                ["\(report.count(.fail)) 不合格", "\(report.count(.unjudged)) 沒判"])
+            cell(.santing, report.santingShort, [report.santingLife])
             cell(
                 .palaces, "判了 \(report.judgedPalaces) 宮",
-                "\(report.palaces.count - report.judgedPalaces) 宮量不到")
+                ["\(report.palaces.count - report.judgedPalaces) 宮量不到"])
         }
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func cell(_ t: ReportTab, _ value: String, _ sub: String) -> some View {
+    /// sub 有幾段就用「・」接成一行，放不下就在「・」後面斷
+    private func cell(_ t: ReportTab, _ value: String, _ sub: [String]) -> some View {
         Button {
             select(t)
         } label: {
@@ -239,9 +243,14 @@ struct ReportWindow: View {
                 }
                 Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
                     .lineLimit(1).minimumScaleFactor(0.8)
-                Text(sub).font(.caption).foregroundStyle(Theme.secondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    Text(sub.joined(separator: "・")).lineLimit(1)
+                    Text(sub.joined(separator: "・\n"))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.caption)
+                .foregroundStyle(Theme.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(Theme.group)
@@ -314,16 +323,19 @@ struct ReportTabBar: View {
         .padding(.horizontal, Theme.group)
         .padding(.vertical, Theme.tight)
         .background(Theme.canvas.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { Rectangle().fill(Theme.separator).frame(height: Theme.hairline) }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("切換報告的區")
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.separator).frame(height: Theme.hairline).accessibilityHidden(true)
+        }
+        // 不包成一個有名字的群組：包了之後輔助功能樹只看得到群組，五顆按鈕抓不到
     }
 }
 
 /// 這一頁真的進來了、真的要離開了，各叫一次。
 /// SwiftUI 的 onDisappear 要等整頁滑完才來，視窗會多留在首頁上一下；這裡在返回一開始就收。
 /// 左緣滑到一半：先不動，放手確定要離開才收，滑回來取消就當沒發生。
+/// blocksBack 是 true 的時候停掉這一頁的返回手勢；變回 false、離開這一頁、這一頁被拿掉，都會還原。
 struct PageLifecycle: UIViewControllerRepresentable {
+    let blocksBack: Bool
     let onShow: () -> Void
     let onLeave: () -> Void
 
@@ -334,13 +346,22 @@ struct PageLifecycle: UIViewControllerRepresentable {
     func updateUIViewController(_ watcher: Watcher, context: Context) {
         watcher.onShow = onShow
         watcher.onLeave = onLeave
+        watcher.blocksBack = blocksBack
+        watcher.applyBack()
+    }
+
+    static func dismantleUIViewController(_ watcher: Watcher, coordinator: ()) {
+        watcher.releaseBack()
     }
 
     final class Watcher: UIViewController {
         var onShow: () -> Void = {}
         var onLeave: () -> Void = {}
+        var blocksBack = false
         private var onScreen = false
         private var shown = false
+        /// 被這一頁停掉的返回手勢
+        private var held: [UIGestureRecognizer] = []
 
         override func viewDidLoad() {
             super.viewDidLoad()
@@ -351,6 +372,7 @@ struct PageLifecycle: UIViewControllerRepresentable {
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             onScreen = true
+            applyBack()
             show(tries: 30)
         }
 
@@ -383,8 +405,32 @@ struct PageLifecycle: UIViewControllerRepresentable {
             DispatchQueue.main.async { [onShow] in onShow() }
         }
 
+        /// 只動這一頁所在的那個 UINavigationController。視窗裡的是另一個，不受影響
+        func applyBack() {
+            guard blocksBack, onScreen else {
+                releaseBack()
+                return
+            }
+            guard let nav = navigationController else { return }
+            var gestures: [UIGestureRecognizer] = []
+            if let edge = nav.interactivePopGestureRecognizer { gestures.append(edge) }
+            if #available(iOS 26.0, *), let content = nav.interactiveContentPopGestureRecognizer {
+                gestures.append(content)
+            }
+            for gesture in gestures where gesture.isEnabled {
+                gesture.isEnabled = false
+                held.append(gesture)
+            }
+        }
+
+        func releaseBack() {
+            for gesture in held { gesture.isEnabled = true }
+            held = []
+        }
+
         private func leave() {
             onScreen = false
+            releaseBack()
             guard shown else { return }
             shown = false
             // 可能正在 SwiftUI 更新畫面的途中被叫到，下一輪再改狀態

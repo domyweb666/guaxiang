@@ -48,6 +48,9 @@ enum Theme {
     static let markShade = Color.black.opacity(0.55)
     static let markWidth: CGFloat = 2
     static let markDot: CGFloat = 10
+    /// 照片上小標籤的字。跟著系統字級放大，到上限為止，不然會蓋住五官
+    static let markText: CGFloat = 12
+    static let markTextMax: CGFloat = 14
 
     // MARK: 間距用途名（domy-design layout，準則 3-46）
 
@@ -73,6 +76,8 @@ enum Theme {
     /// 每個畫面最主要的那顆按鈕。單手檢查要約 60 點（準則 3-19），先取 56
     static let primaryHeight: CGFloat = 56
     static let touch: CGFloat = 44
+    /// 固定大小的圓鈕裡的圖示，不跟字級放大，不然會撐出圓鈕
+    static let touchIcon: CGFloat = 17
     static let barHeight: CGFloat = 10
     static let markSize: CGFloat = 72
     static let emptyIcon: CGFloat = 64
@@ -85,7 +90,7 @@ enum Theme {
     static let windowFraction: CGFloat = 0.5
     static let windowHalf = PresentationDetent.fraction(windowFraction)
     static let windowRadius: CGFloat = 36
-    /// 照片往視窗底下多鋪一段：圓角兩旁和 iOS 26 縮進去的地方才不會露底
+    /// 照片本身至少要鋪到視窗上緣以下這麼多，圓角兩旁才是真的照片。再往下照片不夠長就用最後一排顏色接到螢幕底
     static let windowOverlap: CGFloat = 64
     /// 照片最上面那層淡底，返回鈕和狀態列才看得清楚
     static let scrimOpacity: Double = 0.6

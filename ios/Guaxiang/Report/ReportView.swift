@@ -62,6 +62,8 @@ struct ReportView: View {
     /// 這一頁在不在畫面上（推入完成到開始返回之間）
     @State private var pageOn = false
     @State private var windowUp = false
+    /// 視窗裡有推入的頁
+    @State private var pushed = false
 
     var body: some View {
         GeometryReader { geo in
@@ -77,6 +79,8 @@ struct ReportView: View {
         .ignoresSafeArea(.keyboard)
         .background(
             PageLifecycle(
+                // 視窗左邊露出的那一條滑下去是外層的返回。視窗裡還有上一頁可以回時先停掉，不然整份報告會被關掉
+                blocksBack: pushed && windowUp,
                 onShow: {
                     pageOn = true
                     windowUp = true
@@ -84,6 +88,7 @@ struct ReportView: View {
                 onLeave: {
                     pageOn = false
                     windowUp = false
+                    pushed = false
                 }
             )
             .frame(width: 0, height: 0)
@@ -92,7 +97,7 @@ struct ReportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $windowUp, onDismiss: reopen) {
-            ReportWindow(report: report, tab: $tab, detent: $detent)
+            ReportWindow(report: report, tab: $tab, detent: $detent, pushed: $pushed)
                 .presentationDetents([Theme.windowHalf, .large], selection: $detent)
                 .presentationBackgroundInteraction(.enabled(upThrough: Theme.windowHalf))
                 // 捲內容就是捲內容，要拉高拉低拖上面的橫條和標題列
@@ -106,6 +111,8 @@ struct ReportView: View {
 
     /// 還在這一頁，視窗卻被系統收掉：再升起來，不然這一頁就沒東西可看
     private func reopen() {
+        // 重升的視窗從頭來，裡面沒有推入的頁
+        pushed = false
         if pageOn { windowUp = true }
     }
 
@@ -147,7 +154,7 @@ struct ReportView: View {
         }
     }
 
-    /// 上半部有多大。視窗半高是「螢幕扣掉狀態列和底部之後的一半，再加底部」，照這個估視窗的上緣
+    /// 照片鋪滿整個螢幕，臉放在視窗上面那一段。視窗半高是「螢幕扣掉狀態列和底部之後的一半，再加底部」，照這個估視窗的上緣
     private struct Stage {
         let fill: AnnotatedPhoto.Fill
 
@@ -156,8 +163,8 @@ struct ReportView: View {
             let statusBar = max(0, top - Theme.touch)
             let windowTop = full - (max(0, full - statusBar - bottom) * Theme.windowFraction + bottom)
             fill = AnnotatedPhoto.Fill(
-                size: CGSize(width: size.width, height: max(1, windowTop + Theme.windowOverlap)), top: top,
-                bottom: Theme.windowOverlap + Theme.group)
+                size: CGSize(width: size.width, height: max(1, full)), top: top, bottom: full - windowTop + Theme.group,
+                cover: windowTop + Theme.windowOverlap)
         }
     }
 }
