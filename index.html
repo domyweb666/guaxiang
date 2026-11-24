@@ -618,7 +618,7 @@ function render(R){
 
   // 重點
   const pts = [];
-  pts.push(`<b>${wx.host}形・${T[wx.host].plainShape}</b>：古書說：${T[wx.host].plainLine}`);
+  pts.push(`<b>${wx.host}形・${T[wx.host].plainShape}</b>：古書說${T[wx.host].plainLine}`);
   pts.push(`<b>五官</b>：${tally(OF, "項")}。${grouped(OF, x => x.o.plain, true)}。${W.guan}`);
   if (stHead) pts.push(`<b>臉的三段</b>：${stHead}`);
   else pts.push(`<b>臉的三段</b>：沒有拉髮際線，這次沒看。`);
@@ -681,10 +681,10 @@ function render(R){
   ${seg ? `
   <div class="card">
     <div class="block">${stHead}</div>
-    ${seg.map(s => `<div class="block"><div style="display:flex;justify-content:space-between"><span><b>${s.k}</b>・管${s.life}</span><span class="small">${s.v < 0.95 ? "偏短" : s.v > 1.05 ? "偏長" : "接近平均"}</span></div>
+    ${seg.map(s => `<div class="block"><div style="display:flex;justify-content:space-between"><span><b>${s.k}</b>・管${s.life}</span><span class="small">${s.v < 0.95 ? "比平均短" : s.v > 1.05 ? "比平均長" : "接近平均"}</span></div>
       <div class="small">${s.part}</div>
       <div style="height:10px;background:var(--fill);border-radius:99px;margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, s.v/1.4*100).toFixed(0)}%;background:var(--accent)"></i></div></div>`).join("")}
-    <div class="block"><div class="small">古書還看每一段豐不豐滿，這次沒看。</div>${info({ quotes:[[stRule.yuanwen, stRule.yuanwenPlain]], plain:stRule.baihua, source:stRule.source, terms:[stRule.terms], lit:stRule.litPlain, est:sanEst(), remarks:["古書的中段從鼻根量到鼻頭。這裡三段接著量，分界在兩眉中間和鼻子底。", "比平均短 5% 以上寫「偏短」，長 5% 以上寫「偏長」，中間寫「接近平均」。這兩條線是本工具暫定的。"], cannot:["三段豐不豐滿，要看深度"] })}</div>
+    <div class="block"><div class="small">古書還看每一段豐不豐滿，這次沒看。</div>${info({ quotes:[[stRule.yuanwen, stRule.yuanwenPlain]], plain:stRule.baihua, source:stRule.source, terms:[stRule.terms], lit:stRule.litPlain, est:sanEst(), remarks:["古書的中段從鼻根量到鼻頭。這裡三段接著量，分界在兩眉中間和鼻子底。", "短 5% 以上寫「比平均短」，長 5% 以上寫「比平均長」，中間寫「接近平均」。這兩條線是本工具暫定的。"], cannot:["三段豐不豐滿，要看深度"] })}</div>
   </div>` : `<div class="card"><div class="block small">沒有拉髮際線，上段量不到，這次沒看。有瀏海的話，撥開再掃一次就能看。</div></div>`}
 
 

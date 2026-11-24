@@ -93,7 +93,7 @@ extension Report {
         if let wx = wuxing, let type = W.types[wx.host] {
             points.append(
                 SummaryPoint(
-                    title: "\(wx.host)形・\(type.plainShape)", body: "古書說：\(type.plainLine)", note: wuxingNote))
+                    title: "\(wx.host)形・\(type.plainShape)", body: "古書說\(type.plainLine)", note: wuxingNote))
         } else {
             points.append(SummaryPoint(title: "臉形", body: "這次量到的資料不夠，沒看。", note: wuxingNote))
         }

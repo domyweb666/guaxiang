@@ -248,7 +248,7 @@ struct ReportSectionContent: View {
             HStack {
                 Text(s.k).bold() + Text("・管\(s.life)")
                 Spacer()
-                Note(s.v < 0.95 ? "偏短" : s.v > 1.05 ? "偏長" : "接近平均")
+                Note(s.v < 0.95 ? "比平均短" : s.v > 1.05 ? "比平均長" : "接近平均")
             }
             Note(s.part)
             GeometryReader { geo in

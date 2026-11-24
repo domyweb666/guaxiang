@@ -244,7 +244,7 @@ extension Report {
         if let key = keys[s.k], let e = BookNote.estimate(key, rules: rules, report: self) { note.estimates = [e] }
         note.remarks = [
             "古書的中段從鼻根量到鼻頭。這裡三段接著量，分界在兩眉中間和鼻子底。",
-            "比平均短 5% 以上寫「偏短」，長 5% 以上寫「偏長」，中間寫「接近平均」。這兩條線是本工具暫定的。"
+            "短 5% 以上寫「比平均短」，長 5% 以上寫「比平均長」，中間寫「接近平均」。這兩條線是本工具暫定的。"
         ]
         note.cannot = ["這一段豐不豐滿，要看深度"]
         return note
