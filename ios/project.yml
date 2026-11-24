@@ -39,6 +39,8 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchScreen: {}
+        # iPhone Pro 的螢幕能到 120Hz，沒開這個動畫會被鎖在 60
+        CADisableMinimumFrameDurationOnPhone: true
         # 相機用途要寫具體（HANDOFF 第九節）
         NSCameraUsageDescription: 用前鏡頭量臉的比例。畫面只在手機上處理，不會離開手機。
     settings:
