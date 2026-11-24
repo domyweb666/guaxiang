@@ -6,7 +6,7 @@ import Foundation
 enum AskConfig {
     static let endpoint = ""
     static let model = "claude-sonnet-5-5"
-    static let maxTokens = 900
+    static let maxTokens = 1500
     /// 中繼站、直連最多等這麼久
     static let timeout: TimeInterval = 60
     /// 電腦轉接一題最多 170 秒，格式不對會再問一次，前面可能還有人排隊
@@ -106,6 +106,10 @@ struct AskClient {
     private func viaBridge(
         _ bridge: ClaudeBridge, pack: [Evidence], profile: Profile, question: String, history: [Prompt.Exchange]
     ) async throws -> AskReply {
+        #if DEVTOOLS
+            // 問一題最多等好幾分鐘，電腦關著的話不能也等那麼久：先敲門，8 秒沒應就說連不到
+            _ = try await bridge.ping(session: session)
+        #endif
         let result: (status: Int, data: Data)
         do {
             result = try await post(
@@ -114,6 +118,8 @@ struct AskClient {
         } catch {
             // 按了停止的不算連不到
             if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
+            // 送出去了才斷的，跟一開始就連不到不一樣
+            if (error as? URLError)?.code == .networkConnectionLost { throw AskError.server(ClaudeBridge.dropped) }
             throw AskError.server(ClaudeBridge.notFound)
         }
         if result.status == 401 { throw AskError.server(ClaudeBridge.wrongPassword) }

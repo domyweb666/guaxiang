@@ -14,7 +14,7 @@ async function callClaude(env, system, messages) {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: env.MODEL || "claude-sonnet-5-5", max_tokens: 900, system, messages })
+    body: JSON.stringify({ model: env.MODEL || "claude-sonnet-5-5", max_tokens: 1500, system, messages })
   }).catch(() => null);
   if (!r || !r.ok) throw new Error("AI 服務暫時無法回答");
   const data = await r.json().catch(() => ({}));

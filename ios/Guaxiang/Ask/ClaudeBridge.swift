@@ -43,6 +43,7 @@ struct ClaudeBridge: Equatable {
     }
 
     static let notFound = "連不到電腦。看三件事：手機和電腦連同一個 Wi-Fi；電腦上的轉接程式開著；iPhone 的設定 → 隱私權與安全性 → 區域網路，瓜相有打開。"
+    static let dropped = "等到一半斷線了。等回答的時候切到別的 app、鎖螢幕或換 Wi-Fi 都會斷，按重試再問一次。"
     static let wrongPassword = "密碼對不上。電腦上的轉接程式重開過，密碼就會換，到設定 → 開發工具重新掃一次。"
 
     #if DEVTOOLS

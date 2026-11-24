@@ -61,7 +61,8 @@ final class AskTests: XCTestCase {
             XCTAssertEqual(got?.sanitized(validIDs: Set(ask.ids)), want.clean, want.raw)
         }
         for (kind, text) in ask.fixed {
-            XCTAssertEqual(AskReply.fixed[try XCTUnwrap(AskReply.Kind(rawValue: kind))], text)
+            let known = try XCTUnwrap(AskReply.Kind(rawValue: kind))
+            XCTAssertEqual(AskReply.fixed[known], text)
         }
     }
 
