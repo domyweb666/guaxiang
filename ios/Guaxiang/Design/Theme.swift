@@ -14,6 +14,8 @@ enum Theme {
     /// 壓在主色上的字
     static let onAccent = dynamic(0xFFFFFF, 0x2A0E0A)
     static let accentSoft = dynamic(0xF6E4DF, 0x3A1E1B)
+    /// 刻度尺上古書寫的那一段
+    static let rulerBand = dynamic(0xE9B8AE, 0x7A3A32)
     /// 提醒：琥珀（不穩、實驗、完整版的鎖）。不用紅，避免跟主色混在一起；判讀結果不用這個色
     static let bad = dynamic(0x7A4B00, 0xE9C46A)
     static let badSoft = dynamic(0xF6EBD5, 0x3A2F17)
@@ -47,6 +49,13 @@ enum Theme {
     static let markDot: CGFloat = 10
     /// 「沒看」那個虛線圈的虛線
     static let verdictDash: [CGFloat] = [2, 2]
+    /// 「沒看」那張卡的虛線框
+    static let cardDash: [CGFloat] = [5, 4]
+    /// 刻度尺：尺的粗細、你的位置那顆點、點外面那圈、分界線的高
+    static let rulerTrack: CGFloat = 8
+    static let rulerDot: CGFloat = 20
+    static let rulerRing: CGFloat = 3
+    static let rulerTick: CGFloat = 16
     /// 照片上小標籤的字。跟著系統字級放大，到上限為止，不然會蓋住五官
     static let markText: CGFloat = 12
     static let markTextMax: CGFloat = 14
@@ -145,13 +154,24 @@ enum Theme {
 
 /// 白卡片。裡面放一到多個 CardBlock，中間自動畫分隔線
 struct Card<Content: View>: View {
+    /// 這次沒看的：不填底，虛線框
+    var dashed = false
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card)
+            .background(dashed ? Color.clear : Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .overlay {
+                if dashed {
+                    RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                        .strokeBorder(
+                            Theme.tertiary, style: StrokeStyle(lineWidth: Theme.hairline, dash: Theme.cardDash)
+                        )
+                        .allowsHitTesting(false)
+                }
+            }
     }
 }
 

@@ -1,6 +1,6 @@
 {
-  "version": "0.5.0",
-  "note": "瓜相 MVP 規則庫。門檻全部是暫定值，等收到 50 人資料後用排名重切。yuanwen 是古書原文，一字不動。給人看的欄位（baihua、plain、plainName、plainFormula、yes、no、why、notMeasured、terms、litPlain）只寫白話，不寫章節號和點位編號；章節號放 ref，公式的點位編號放 formula。",
+  "version": "0.5.1",
+  "note": "瓜相 MVP 規則庫。門檻全部是暫定值，等收到 50 人資料後用排名重切。yuanwen 是古書原文，一字不動。給人看的欄位（baihua、plain、plainName、plainFormula、yes、no、why、notMeasured、terms、litPlain）只寫白話，不寫章節號和點位編號；章節號放 ref，公式的點位編號放 formula。features 的 scale 是刻度尺兩端（from 是最左、to 是最右，可以由大到小），暫定值，只管畫面，不影響判讀。measure 寫 noRuler 就不畫尺。",
   "features": {
     "santing_U": {
       "name": "上停",
@@ -28,7 +28,8 @@
       "formula": "max(|上停−1|, |中停−1|, |下停−1|)",
       "unit": "%",
       "plainName": "三段裡離平均最遠的一段",
-      "plainFormula": "上段、中段、下段各跟平均長度比，取差最多的那一段。"
+      "plainFormula": "上段、中段、下段各跟平均長度比，取差最多的那一段。",
+      "scale": { "from": 0.2, "to": 0, "left": "差很多", "right": "差不多長" }
     },
     "face_aspect": {
       "name": "臉長寬比",
@@ -56,56 +57,64 @@
       "formula": "左右平均：(眉尾 70/300 比外眼角 33/263 再往外多少) ÷ 眼長；0 表示剛好齊",
       "unit": "倍",
       "plainName": "眉尾比眼尾多出多少",
-      "plainFormula": "眉尾比眼尾再往外多少，除以眼睛的長度，左右取平均。0 就是剛好跟眼尾齊。"
+      "plainFormula": "眉尾比眼尾再往外多少，除以眼睛的長度，左右取平均。0 就是剛好跟眼尾齊。",
+      "scale": { "from": -0.3, "to": 0.5, "left": "短", "right": "長" }
     },
     "brow_tail": {
       "name": "眉尾角度",
       "formula": "左右平均：眉頭(107/336)到眉尾(70/300)的角度，眉尾比眉頭高為正",
       "unit": "度",
       "plainName": "眉尾的高低",
-      "plainFormula": "從眉頭連到眉尾，看這條線斜幾度，左右取平均。眉尾比眉頭高是正的，低是負的。"
+      "plainFormula": "從眉頭連到眉尾，看這條線斜幾度，左右取平均。眉尾比眉頭高是正的，低是負的。",
+      "scale": { "from": -20, "to": 20, "left": "往下", "right": "往上" }
     },
     "yintang": {
       "name": "印堂寬 ÷ 眼長",
       "formula": "兩眉頭距離(107↔336) ÷ 平均眼長",
       "unit": "倍",
       "plainName": "兩眉中間是眼睛的幾倍寬",
-      "plainFormula": "兩邊眉頭之間的距離，除以一隻眼睛的平均長度。"
+      "plainFormula": "兩邊眉頭之間的距離，除以一隻眼睛的平均長度。",
+      "scale": { "from": 0.6, "to": 1.6, "left": "窄", "right": "寬" }
     },
     "eye_lw": {
       "name": "眼長 ÷ 眼高",
       "formula": "左右平均：眼長 ÷ 上下眼瞼距離(159-145 / 386-374)",
       "unit": "倍",
       "plainName": "眼睛長度是高度的幾倍",
-      "plainFormula": "眼頭到眼尾的長度，除以上下眼皮之間的距離，左右取平均。"
+      "plainFormula": "眼頭到眼尾的長度，除以上下眼皮之間的距離，左右取平均。",
+      "scale": { "from": 2.2, "to": 4.2, "left": "圓", "right": "細長" }
     },
     "nose_dev": {
       "name": "鼻樑偏離",
       "formula": "鼻樑點(6,197,195,5)離「山根(168)→鼻尖(1)」直線的最大距離 ÷ 臉寬（量歪不歪，不受轉頭影響）",
       "unit": "%",
       "plainName": "鼻樑離直線多遠",
-      "plainFormula": "從鼻根到鼻尖拉一條直線，看鼻樑中間離這條線最遠多少，再除以臉寬。轉頭不會影響。"
+      "plainFormula": "從鼻根到鼻尖拉一條直線，看鼻樑中間離這條線最遠多少，再除以臉寬。轉頭不會影響。",
+      "scale": { "from": 0.03, "to": 0, "left": "有弧度", "right": "直" }
     },
     "mouth_ipd": {
       "name": "嘴寬 ÷ 瞳距",
       "formula": "嘴角(61↔291) ÷ 兩瞳孔中心(468↔473)",
       "unit": "倍",
       "plainName": "嘴寬是瞳孔距離的幾倍",
-      "plainFormula": "兩邊嘴角的距離，除以兩眼瞳孔的距離。"
+      "plainFormula": "兩邊嘴角的距離，除以兩眼瞳孔的距離。",
+      "scale": { "from": 0.65, "to": 1.25, "left": "窄", "right": "寬" }
     },
     "mouth_corner": {
       "name": "嘴角高度",
       "formula": "(唇中線 y − 兩嘴角平均 y) ÷ 嘴寬，嘴角比唇中線高為正",
       "unit": "%",
       "plainName": "嘴角的高低",
-      "plainFormula": "嘴角比上下唇中間高多少，除以嘴寬。嘴角比較高是正的，低是負的。"
+      "plainFormula": "嘴角比上下唇中間高多少，除以嘴寬。嘴角比較高是正的，低是負的。",
+      "scale": { "from": -0.06, "to": 0.06, "left": "往下", "right": "往上" }
     },
     "lip_thick": {
       "name": "唇厚 ÷ 嘴寬",
       "formula": "(上唇 0→13 ＋ 下唇 14→17) ÷ 嘴寬",
       "unit": "倍",
       "plainName": "嘴唇的厚薄",
-      "plainFormula": "上唇和下唇的厚度加起來，除以嘴寬。"
+      "plainFormula": "上唇和下唇的厚度加起來，除以嘴寬。",
+      "scale": { "from": 0.1, "to": 0.4, "left": "薄", "right": "厚" }
     },
     "renzhong": {
       "name": "人中 ÷ 下停",
@@ -623,7 +632,8 @@
         "op": ">=",
         "th": "yintang_wide",
         "yes": "兩眉中間比一隻眼睛寬，跟古書說的寬一樣",
-        "no": "兩眉中間大約一隻眼睛寬，或窄一點，古書說的是寬"
+        "no": "兩眉中間大約一隻眼睛寬，或窄一點，古書說的是寬",
+        "noRuler": true
       },
       "notMeasured": "古書還看皮膚的光亮，相機量不準，所以這次只看了寬窄。",
       "source": "《麻衣相法》〈十二宮〉",

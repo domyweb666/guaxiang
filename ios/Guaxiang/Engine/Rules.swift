@@ -37,6 +37,15 @@ struct FeatureDef: Decodable {
     let unit: String
     let plainName: String
     let plainFormula: String
+    let scale: RulerScale?
+}
+
+/// 刻度尺的兩端：最左和最右各是多少、寫什麼字。暫定值，只管畫面
+struct RulerScale: Decodable {
+    let from: Double
+    let to: Double
+    let left: String
+    let right: String
 }
 
 struct Threshold: Decodable {
@@ -58,6 +67,8 @@ struct Condition: Decodable {
     let yes: String?
     let no: String?
     let type: String?
+    /// 不畫刻度尺：原文沒有寫這個樣子，畫了會像古書說的
+    let noRuler: Bool?
 }
 
 struct Official: Decodable, Identifiable {

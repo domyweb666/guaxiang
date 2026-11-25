@@ -80,13 +80,18 @@ struct PaywallView: View {
                     HStack {
                         Text(g.topic).font(.headline)
                         Spacer()
-                        VerdictTag(status: .pass)
                         InfoButton(subject: g.topic) {
                             BookNote.palace(g, rules: rules, report: nil, result: nil)
                         }
                     }
+                    if let m = g.measure,
+                        let ruler = Ruler(m, measured: Sample.measurement(rulesVersion: rules.version).F, rules: rules)
+                    {
+                        Text(m.yes ?? "").fixedSize(horizontal: false, vertical: true)
+                        RulerView(ruler: ruler, status: .pass)
+                    }
                     Text("古書說：" + baihua).fixedSize(horizontal: false, vertical: true)
-                    Note("範例只看了鼻樑直不直。")
+                    Note("範例只看了鼻樑直不直。圓點的位置是假的。")
                 }
             }
         }

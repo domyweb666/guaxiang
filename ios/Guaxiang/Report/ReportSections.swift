@@ -143,13 +143,14 @@ struct ReportSectionContent: View {
                 Text(rules.wuxing.guan).font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }
             Note("沒看的不算相符，也不算不同。「十年」只是概數。")
+            RulerGuide()
         }
         .padding(.horizontal, Theme.tight)
         ForEach(report.officials) { x in officialCard(x) }
     }
 
     private func officialCard(_ x: OfficialResult) -> some View {
-        Card {
+        Card(dashed: x.status == .unjudged) {
             CardBlock(divider: false) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.item) {
                     if let color = markColor(x.official.id) {
@@ -158,7 +159,7 @@ struct ReportSectionContent: View {
                     }
                     Text(x.official.plain).font(.title3.weight(.semibold))
                     Spacer()
-                    VerdictTag(status: x.status)
+                    if x.status == .unjudged { VerdictTag(status: x.status) }
                 }
                 Note("古書說：" + x.official.governs)
                 if x.status == .unjudged {
@@ -197,10 +198,12 @@ struct ReportSectionContent: View {
 
     private func rowLine(_ row: ConditionRow, of x: OfficialResult) -> some View {
         let c = row.condition
+        let ruler = report.ruler(c)
         return HStack(alignment: .center, spacing: Theme.group) {
-            VerdictMark(row.result.pass)
+            if ruler == nil { VerdictMark(row.result.pass) }
             VStack(alignment: .leading, spacing: Theme.tight / 2) {
                 Text(rowText(row)).fixedSize(horizontal: false, vertical: true)
+                if let ruler { RulerView(ruler: ruler, status: Status(row.result.pass)) }
                 flags(edge: row.result.edge, unstable: row.result.unstable)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -271,6 +274,7 @@ struct ReportSectionContent: View {
                 VerdictSummary(tally: report.palaceTally, unit: "件")
             }
             Note("沒看的不算相符，也不算不同。")
+            RulerGuide()
         }
         .padding(.horizontal, Theme.tight)
         ForEach(report.palaces) { x in palaceCard(x) }
@@ -278,16 +282,18 @@ struct ReportSectionContent: View {
 
     private func palaceCard(_ x: PalaceResult) -> some View {
         let g = x.palace
-        return Card {
+        let ruler = report.ruler(x)
+        return Card(dashed: x.status == .unjudged) {
             CardBlock(divider: false) {
                 HStack(spacing: Theme.item) {
                     Text(g.topic).font(.title3.weight(.semibold))
                     Spacer()
-                    VerdictTag(status: x.status)
+                    if ruler == nil { VerdictTag(status: x.status) }
                     InfoButton(subject: g.topic) { report.note(palace: x) }
                 }
                 Note("看臉上的" + g.place)
                 Text(x.line).fixedSize(horizontal: false, vertical: true)
+                if let ruler { RulerView(ruler: ruler, status: x.status) }
                 flags(edge: x.edge, unstable: x.unstable)
                 if let baihua = g.baihua { Note("古書說：" + baihua) }
             }
