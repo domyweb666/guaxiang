@@ -209,6 +209,8 @@ struct ReportSectionContent: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             InfoButton(subject: c.plain ?? x.official.plain) { report.note(condition: c, of: x) }
         }
+        // 兩條尺要分得開，上一條的「窄、寬」才不會看成下一條的
+        .padding(.top, Theme.item)
     }
 
     private func rowText(_ row: ConditionRow) -> String {
