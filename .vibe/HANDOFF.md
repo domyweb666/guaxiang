@@ -1,4 +1,4 @@
-# Handoff: 九項做完，等多米決定樣式和打包
+# Handoff: 九項做完、判讀改刻度尺，等多米決定打包
 
 > 產出時間：2026-11-25
 > repo：`E:\瓜相\guaxiang`，分支 `ios`。`main` 和 tag 沒動
@@ -11,7 +11,7 @@
 
 ## 📌 等多米決定
 
-1. 判讀樣式 A 對照／B 刻度尺／C 圓點／D 朱印（推薦 A，現在是 C）：https://claude.ai/artifact/7bAdzHdrLf8D8AnwdsxB2X ，改 `Report/VerdictView.swift`
+1. ~~判讀樣式~~ 多米 2026-11-25 選 B 刻度尺，做完（`52a1572`、`0cb57e2`，`Engine/Ruler.swift`＋`Report/VerdictView.swift`，代決 86–92），iOS 26.4 模擬器看過淺色、深色、最大字級
 2. 要不要打 `tf-4`（沒說不准打）
 3. 命宮：原文「光明如鏡，學問皆通」沒有「寬平」，規則庫卻量寬窄（`rules.json:619`）。建議改成沒看，或找到有「寬平」的原文
 4. 眉毛正面寫「跟長壽連在一起」（`rules.json:243`），跟「報告不判壽命」衝突
@@ -28,5 +28,5 @@
 ## ⏭️ 下一步
 
 1. 先 `git log --oneline -3` 確認沒有別的 session 改過
-2. 照多米選的樣式改 `VerdictView.swift`，處理第 3、4 點，推 ios 看 CI
+2. 多米回覆後處理第 3、4 點，推 ios 看 CI
 3. 上架前必做：連掃三次一致性 <3%、50 人門檻校準、巴納姆盲測、原文校勘
