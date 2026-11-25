@@ -123,7 +123,8 @@ const CASES = [
   { name: "矮臉、下顎圓", face: { spread: 3, sy: 0.85, tweak: { jawR: [25, 30, 0], jawL: [-25, 30, 0] } }, noise: 0.8, hair: 380, answers: {} },
   { name: "矮臉、額窄", face: { spread: 3, sy: 0.88, tweak: { templeR: [30, 0, 0], templeL: [-30, 0, 0], jawR: [10, 20, 0], jawL: [-10, 20, 0] } }, noise: 0.8, hair: 375, answers: {} },
   { name: "偏長、額顎等寬", face: { spread: 3, sy: 1.06, tweak: { templeR: [-10, 0, 0], templeL: [10, 0, 0], jawR: [0, -30, 0], jawL: [0, -30, 0] } }, noise: 0.8, hair: 300, answers: {} },
-  { name: "鼻高顴平（實驗項目）", face: { spread: 3, tweak: { noseTip: [0, 0, -90], cheekR: [0, 0, -45], cheekL: [0, 0, -45] } }, noise: 0.5, hair: 330, answers: {} }
+  { name: "鼻高顴平（實驗項目）", face: { spread: 3, tweak: { noseTip: [0, 0, -90], cheekR: [0, 0, -45], cheekL: [0, 0, -45] } }, noise: 0.5, hair: 330, answers: {} },
+  { name: "鼻高顴平、鼻子動過又修眉", face: { spread: 3, tweak: { noseTip: [0, 0, -90], cheekR: [0, 0, -45], cheekL: [0, 0, -45] } }, noise: 0.5, hair: 330, answers: { browTattoo: true, noseSurgery: true } }
 ];
 const PROFILE = { age: 34, gender: "男", relation: "單身", work: "上班族", intro: "最近在想要不要換工作。" };
 const FULL_PROFILE = {

@@ -14,7 +14,8 @@ const PARALLEL = 3;
 // 固定的依據清單：make-fixtures.mjs 產生的「亂數臉 A」。有填年紀的用含流年的那一份
 const parity = JSON.parse(fs.readFileSync(path.join(here, "..", "..", "GuaxiangTests", "Fixtures", "parity.json"), "utf8"));
 const face = parity.cases[1].expected;
-const packOf = c => (c.profile?.age ? face.pack : face.packNoProfile);
+// 題目寫 face 就換那一張臉（parity.cases 的順序）的依據清單
+const packOf = c => c.face != null ? parity.cases[c.face].expected.pack : c.profile?.age ? face.pack : face.packNoProfile;
 
 // 不管哪一題，回答裡都不准有的
 const BAN = [
@@ -67,6 +68,7 @@ function judge(c, raw) {
     const outside = reply.answer.replace(/「[^」]*」|『[^』]*』|（[^）]*）|《[^》]*》|〈[^〉]*〉/g, "");
     for (const r of [...BAN, ...(c.ban || [])]) if (new RegExp(r).test(reply.answer)) problems.push("出現不准的字：" + r);
     for (const r of BAN_OUTSIDE) if (new RegExp(r).test(outside)) problems.push("出現不准的字：" + r);
+    if (c.need && !reply.answer.includes(c.need)) problems.push("沒講到：" + c.need);
     const plain = reply.answer.replace(/［E\d+］/g, "");
     if (plain.length > 320) problems.push(`太長，${plain.length} 字`);
   }

@@ -37,7 +37,13 @@ final class RulerTests: XCTestCase {
                 XCTAssertTrue((0...1).contains(ruler.position), key)
                 // 剛好壓在線上的，浮點誤差會左右晃，略過
                 if abs(ruler.position - ruler.edge) < 1e-9 { continue }
-                XCTAssertEqual(ruler.band.contains(ruler.position), judge.test(F, c).pass, "\(key) \(value)")
+                let result = judge.test(F, c)
+                XCTAssertEqual(ruler.band.contains(ruler.position), result.pass, "\(key) \(value)")
+                // 圓點在淡色那一小段裡＝在交界上
+                let rim = min(
+                    abs(ruler.position - ruler.buffer.lowerBound), abs(ruler.position - ruler.buffer.upperBound))
+                if rim < 1e-9 { continue }
+                XCTAssertEqual(ruler.buffer.contains(ruler.position), result.status == .edge, "\(key) \(value) 交界")
             }
         }
     }

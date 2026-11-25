@@ -31,7 +31,7 @@ struct Report {
         measurement = m
         self.rules = rules
         officials = judge.officials(m.F, answers: m.answers)
-        matched = judge.matchRules(m.F, hasHair: m.hasHair)
+        matched = judge.matchRules(m.F, hasHair: m.hasHair, answers: m.answers)
         wuxing = judge.wuxing(m.F, hasHair: m.hasHair)
         santingRule = matched.first { $0.part == "三停" }
         others = matched.filter { $0.part != "三停" }
@@ -47,9 +47,17 @@ struct Report {
         }
     }
 
+    /// 三段剛好在「差不多長」和「長短不一樣」的交界上
+    var santingOnEdge: Bool {
+        segments != nil && santingRule != nil && Judge(rules: rules).santing(measurement.F).edge
+    }
+
     /// 三停那一段的白話結論
     var santingHeadline: String? {
         guard let segments, let santingRule else { return nil }
+        if santingOnEdge {
+            return "臉的三段剛好在「差不多長」和「長短不一樣」的交界上，換個光線再掃可能會變，這次不下結論。"
+        }
         if santingRule.id == "santing-equal" {
             return "臉的上、中、下三段差不多長。古書說這樣一生各段比較平穩。"
         }
@@ -122,10 +130,10 @@ extension Report {
         return points
     }
 
-    /// 「相符的是鼻子；不同的是眉毛、嘴巴；沒看的是耳朵。」三種都沒有就是空字串
+    /// 「相符的是鼻子；不同的是眉毛、嘴巴；在交界上的是眼睛；沒看的是耳朵。」四種都沒有就是空字串
     private static func grouped(_ items: [(name: String, status: Status)], unseen: Bool = true) -> String {
         var parts: [String] = []
-        for status in [Status.pass, .fail, .unjudged] {
+        for status in [Status.pass, .fail, .edge, .unjudged] {
             if status == .unjudged, !unseen { continue }
             let names = items.filter { $0.status == status }.map { $0.name }
             if !names.isEmpty { parts.append("\(status.word)的是\(names.joined(separator: "、"))") }

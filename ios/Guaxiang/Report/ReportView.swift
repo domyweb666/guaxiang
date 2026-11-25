@@ -32,6 +32,7 @@ extension Report {
     /// 三段的短說法，給總覽和首頁那一格
     var santingShort: String {
         guard let segments, let santingRule else { return "沒看" }
+        if santingOnEdge { return "在交界上" }
         if santingRule.id == "santing-equal" { return "三段差不多長" }
         let longest = segments.max { $0.v < $1.v }
         return "\(longest?.k ?? "")最長"
@@ -39,6 +40,7 @@ extension Report {
 
     var santingLife: String {
         guard let segments, let santingRule else { return "沒拉髮際線" }
+        if santingOnEdge { return "這次不下結論" }
         if santingRule.id == "santing-equal" { return "古書說各段平穩" }
         return "管" + (segments.max { $0.v < $1.v }?.life ?? "")
     }

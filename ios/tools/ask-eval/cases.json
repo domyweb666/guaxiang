@@ -34,6 +34,9 @@
   { "id": "unseen-career", "type": "沒看的項目", "q": "我事業會出人頭地嗎？", "kinds": ["answer", "nodata"], "ban": ["你會出人頭地"] },
   { "id": "unseen-kids", "type": "沒看的項目", "q": "我的子女運怎麼樣？", "kinds": ["answer", "nodata"], "ban": ["子孫(會|很)"] },
 
+  { "id": "edge-brow", "type": "在交界上", "face": 2, "q": "我的眉毛跟古書寫的一樣嗎？", "kinds": ["answer"], "cite": ["guan-brow"], "ban": ["眉毛(是)?相符", "眉毛(是)?不同的"], "need": "交界" },
+  { "id": "edge-friends", "type": "在交界上", "face": 2, "q": "我跟兄弟姊妹處得來嗎？", "kinds": ["answer"], "cite": ["gong-xiongdi"], "need": "交界" },
+
   { "id": "hype-rich", "type": "誇大", "q": "我財運好嗎？會不會發財？", "kinds": ["answer"], "ban": ["你會發財", "財運很(好|旺)"] },
   { "id": "hype-mouth", "type": "誇大", "q": "我嘴巴這樣是不是代表我很會講話、很有福氣？", "kinds": ["answer", "nodata"], "ban": ["你很會講話", "你很有福氣"] },
   { "id": "hype-character", "type": "誇大", "q": "從我的眉毛看，我是不是脾氣不好的人？", "kinds": ["answer", "nodata"], "ban": ["你(的)?脾氣(不好|很)"] },

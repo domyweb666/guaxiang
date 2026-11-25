@@ -35,7 +35,15 @@ final class BookNoteTests: XCTestCase {
         long.F["cheek_prom"]?.v = 0.05
         var empty = base
         empty.F = [:]
-        return [base, noBrow, noHair, blocked, long, empty].map { Report(measurement: $0, rules: rules) }
+        // 每一條都剛好壓在線上
+        var edge = base
+        edge.F["santing_dev"]?.v = 0.1
+        edge.F["brow_eye"]?.v = 0.1
+        edge.F["eye_lw"]?.v = 3.2
+        edge.F["nose_dev"]?.v = 0.015
+        edge.F["yintang"]?.v = 1.1
+        edge.F["mouth_ipd"]?.v = 0.95
+        return [base, noBrow, noHair, blocked, long, empty, edge].map { Report(measurement: $0, rules: rules) }
     }
 
     private func check(_ note: BookNote?, _ what: String, estimates: Bool, file: StaticString = #filePath, line: UInt = #line) {
@@ -116,21 +124,23 @@ final class BookNoteTests: XCTestCase {
         }
     }
 
-    /// 三種數量都寫出來，加起來等於總數；沒看的不混進另外兩種
+    /// 四種數量都寫出來，加起來等於總數；在交界上、沒看的不混進另外兩種
     func testTalliesAddUp() throws {
         let rules = try loadRules()
         for report in reports(rules) {
             for (tally, total) in [(report.officialTally, 5), (report.palaceTally, 12)] {
-                XCTAssertEqual(tally.same + tally.different + tally.unseen, total)
+                XCTAssertEqual(tally.same + tally.different + tally.onEdge + tally.unseen, total)
                 XCTAssertEqual(tally.total, total)
-                for n in [tally.same, tally.different, tally.unseen] {
+                for n in [tally.same, tally.different, tally.onEdge, tally.unseen] {
                     XCTAssertTrue(tally.sentence("項").contains("\(n) 項"))
                 }
             }
             XCTAssertEqual(report.officialTally.unseen, report.count(.unjudged))
         }
-        let t = Tally([.pass, .unjudged, .fail, .unjudged])
-        XCTAssertEqual(t.sentence("項"), "1 項跟古書寫的相符・1 項不同・2 項沒看")
+        let t = Tally([.pass, .unjudged, .fail, .edge, .unjudged])
+        XCTAssertEqual(t.sentence("項"), "1 項跟古書寫的相符・1 項不同・1 項在交界上・2 項沒看")
+        XCTAssertEqual(VerdictShort.rest(t, "項"), ["1 項不同", "1 項在交界上", "2 項沒看"])
+        XCTAssertEqual(VerdictShort.rest(Tally([.pass, .fail]), "項"), ["1 項不同", "0 項沒看"])
     }
 
     /// 正面的字：沒有考試的詞、章節號、術語
@@ -162,7 +172,7 @@ final class BookNoteTests: XCTestCase {
             clean(text, "正面")
             for term in terms { XCTAssertFalse(text.contains(term), "正面「\(text)」有術語「\(term)」") }
         }
-        XCTAssertEqual([Status.pass, .fail, .unjudged].map(\.word), ["相符", "不同", "沒看"])
+        XCTAssertEqual([Status.pass, .fail, .edge, .unjudged].map(\.word), ["相符", "不同", "在交界上", "沒看"])
     }
 
     func testLiunianLayerInPlainWords() throws {

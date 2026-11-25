@@ -43,6 +43,7 @@ h2{font-size:22px;font-weight:700;margin:28px 4px 10px}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid var(--text);margin-right:5px;vertical-align:0}
 .d-same{background:var(--text)}
 .d-un{border:1px dashed var(--gray)}
+.d-edge{background:linear-gradient(90deg,var(--text) 50%,transparent 50%)}
 details.info{margin-top:6px}
 details.info>summary{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:0;font-size:13px;color:var(--sub)}
 details.info>summary::after{content:none}
@@ -453,7 +454,10 @@ function summarize(){
     const vals = all.map(f => f[k]).filter(Number.isFinite);
     const med = median(vals), iqr = quant(vals,.75) - quant(vals,.25);
     const isDeg = k === "jaw_angle" || k === "brow_tail";
-    const unstable = isDeg ? iqr > 3 : Math.abs(iqr / (Math.abs(med) || 1e-6)) > RULES.thresholds.unstable_spread.value && Math.abs(med) > 0.02;
+    // 有尺的跟尺寬比，接近 0 的量測（鼻樑、嘴角）才標得到不穩
+    const scale = RULES.features[k]?.scale, spread = RULES.thresholds.unstable_spread.value;
+    const unstable = isDeg ? iqr > 3 : scale ? iqr > spread * Math.abs(scale.to - scale.from)
+      : Math.abs(iqr / (Math.abs(med) || 1e-6)) > spread && Math.abs(med) > 0.02;
     out[k] = { v: med, iqr, unstable };
   }
   return { F: out, hairRatio };
@@ -465,26 +469,39 @@ function test(F, c){
   const x = F[c.feature]?.v; if (!Number.isFinite(x)) return { pass:null };
   const t = c.th ? TH(c.th) : c.value;
   const pass = c.op === ">=" ? x >= t : c.op === "<=" ? x <= t : c.op === ">" ? x > t : x < t;
-  const isDeg = c.feature === "brow_tail" || c.feature === "jaw_angle";
-  const edge = isDeg ? Math.abs(x - t) <= 1 : Math.abs(x - t) <= Math.abs(t) * 0.03;
+  // 交界：離門檻不超過 rules.json 的 edge。落在裡面不算相符，也不算不同
+  const edge = Math.abs(x - t) <= (RULES.features[c.feature]?.edge ?? 0);
   return { pass, x, t, edge, unstable: F[c.feature].unstable };
 }
+// 掃描前勾了「動過」的部位，用到它的項目都不看
+const BLOCKS = {
+  brow_tattoo: [() => S.answers.browTattoo, "你勾了紋眉或修眉，眉形是選出來的，不是天生的"],
+  nose_surgery: [() => S.answers.noseSurgery, "你勾了鼻子動過，古書講的是天生的樣子"]
+};
+const blockedWhy = key => key && BLOCKS[key] && BLOCKS[key][0]() ? BLOCKS[key][1] : null;
+const edgeLine = plain => `${plain}：剛好在交界上，換個光線再掃可能會變，不算相符也不算不同`;
+const rowStatus = r => r.pass == null ? "不判" : r.edge ? "交界" : r.pass ? "成" : "不成";
+const rowLine = r => r.blocked ? `${r.c.plain}：這一條沒看，${r.blocked}` : r.pass == null ? `${r.c.plain}：這次量不到`
+  : r.edge ? edgeLine(r.c.plain) : r.pass ? r.c.yes : r.c.no;
 function judgeOfficials(F){
   return RULES.officials.map(o => {
     if (!o.conditions.length) return { o, status:"不判", why:o.unjudged, rows:[] };
-    if (o.blockedBy === "brow_tattoo" && S.answers.browTattoo) return { o, status:"不判", why:"你勾了紋眉或修眉，眉形是選出來的，不是天生的", rows:[] };
-    if (o.blockedBy === "nose_surgery" && S.answers.noseSurgery) return { o, status:"不判", why:"你勾了鼻子動過，古書講的是天生的樣子", rows:[] };
-    const rows = o.conditions.map(c => ({ c, ...test(F, c) }));
+    if (blockedWhy(o.blockedBy)) return { o, status:"不判", why:blockedWhy(o.blockedBy), rows:[] };
+    const rows = o.conditions.map(c => { const blocked = blockedWhy(c.blockedBy); return blocked ? { c, pass:null, blocked } : { c, ...test(F, c) }; });
+    const hit = rows.find(r => r.blocked);
+    if (hit) return { o, status:"不判", why:`「${hit.c.plain}」這一條沒看：${hit.blocked}`, rows };
     if (rows.some(r => r.pass === null)) return { o, status:"不判", why:"這次量到的資料不夠", rows };
-    const status = rows.every(r => r.pass) ? "成" : "不成";
-    return { o, status, rows };
+    const all = rows.map(rowStatus);
+    return { o, status: all.includes("不成") ? "不成" : all.includes("交界") ? "交界" : "成", rows };
   });
 }
 function matchRules(F, hasHair){
   return RULES.rules.filter(r => {
     if (r.needHairline && !hasHair) return false;
+    if (blockedWhy(r.blockedBy)) return false;
     const conds = r.when.all || [r.when];
-    return conds.every(c => test(F, c).pass === true);
+    // 落在交界的不算對上；三段剛好在交界時，固定放 onEdge 那一條的原文（它兩種都講到）
+    return conds.every(c => { const t = test(F, c); return t.pass != null && (t.edge ? !!r.onEdge : t.pass); });
   });
 }
 function wuxing(F, hasHair){
@@ -543,11 +560,11 @@ function render(R){
   const wx = R.wx, W = RULES.wuxing, T = W.types;
   const OF = R.officials;
   // 判讀結果的樣子集中在這裡：相符實心、不同空心、沒看虛線，旁邊一定有字
-  const dot = s => `<i class="dot ${s === "成" ? "d-same" : s === "不成" ? "" : "d-un"}"></i>`;
+  const dot = s => `<i class="dot ${s === "成" ? "d-same" : s === "不成" ? "" : s === "交界" ? "d-edge" : "d-un"}"></i>`;
   const tag = s => `<span class="tag t-v">${dot(s)}${statusWord(s)}</span>`;
   const tally = (list, unit) => { const n = s => list.filter(x => x.status === s).length;
-    return `${n("成")} ${unit}跟古書寫的相符・${n("不成")} ${unit}不同・${n("不判")} ${unit}沒看`; };
-  const grouped = (list, name, withUnseen) => ["成", "不成", "不判"].filter(s => withUnseen || s !== "不判").map(s => {
+    return `${n("成")} ${unit}跟古書寫的相符・${n("不成")} ${unit}不同・${n("交界")} ${unit}在交界上・${n("不判")} ${unit}沒看`; };
+  const grouped = (list, name, withUnseen) => ["成", "不成", "交界", "不判"].filter(s => withUnseen || s !== "不判").map(s => {
     const names = list.filter(x => x.status === s).map(name); return names.length ? `${statusWord(s)}的是${names.join("、")}` : ""; }).filter(Boolean).join("；");
   // 原文和估算方式，收在白話旁邊
   const NOQUOTE = "原書文字還沒逐字摘錄，這裡是白話整理。";
@@ -556,8 +573,9 @@ function render(R){
   const estimate = (k, c, outcome = "就寫「相符」") => {
     const d = RULES.features[k], o = R.F[k]; if (!d) return "";
     const t = c ? (c.th ? TH(c.th) : c.value) : null;
-    return `<p style="margin-top:8px"><b>${esc(d.plainName)}</b><br>${esc(d.plainFormula)}</p><p class="small">${o && Number.isFinite(o.v) ? `你的數字：${num(k, o.v)}<br>${R.frames} 張畫面的數字由小排到大，去掉頭尾各四分之一，剩下的最大和最小差 ${num(k, o.iqr)}。` : "這次量不到。"}${t != null ? `<br>對照的線：${num(k, t)}，${sides[c.op]}${outcome}。<br>古書沒有給數字，這條線是本工具暫定的。${esc(c.th ? RULES.thresholds[c.th].plain : "")}` : ""}</p>`;
+    return `<p style="margin-top:8px"><b>${esc(d.plainName)}</b><br>${esc(d.plainFormula)}</p><p class="small">${o && Number.isFinite(o.v) ? `你的數字：${num(k, o.v)}<br>${R.frames} 張畫面的數字由小排到大，去掉頭尾各四分之一，剩下的最大和最小差 ${num(k, o.iqr)}。` : "這次量不到。"}${t != null ? `<br>對照的線：${num(k, t)}，${sides[c.op]}${outcome}。離這條線不超過 ${edgeText(k)} 算在交界上，不下結論。<br>古書沒有給數字，這條線是本工具暫定的。${esc(c.th ? RULES.thresholds[c.th].plain : "")}` : ""}</p>`;
   };
+  const edgeText = k => { const d = RULES.features[k], e = d.edge ?? 0, n = v => String(+v.toFixed(4)); return d.unit === "%" ? n(e * 100) + "%" : `${n(e)} ${d.unit}`; };
   const sanEst = () => estimate("santing_dev", RULES.rules.find(r => r.id === "santing-equal").when, "就寫「差不多長」") + ["santing_U","santing_M","santing_L"].map(k => estimate(k)).join("");
   const info = n => `<details class="info"><summary>ⓘ 看原文和估算方式</summary><div class="in">
     ${(n.quotes || []).map(q => `<p class="quote">${esc(q[0])}</p><p>${esc(q[1])}</p>`).join("")}
@@ -569,7 +587,7 @@ function render(R){
   const offLine = x => {
     if (x.status === "不判") return x.why;
     if (x.status === "成") return x.rows.map(r => r.c.yes).join("，");
-    return x.rows.filter(r => !r.pass).map(r => r.c.no).join("，");
+    return x.rows.filter(r => rowStatus(r) === x.status).map(rowLine).join("，");
   };
 
   // 命格的理由（照本工具暫定的計分方式描述）
@@ -591,10 +609,12 @@ function render(R){
     { k:"中段", part:"眉心到鼻子底", life:"中年", v:R.F.santing_M.v },
     { k:"下段", part:"鼻子底到下巴", life:"晚年", v:R.F.santing_L.v } ] : null;
   const stRule = R.rules.find(r => r.part === "三停");
+  const stTest = test(R.F, RULES.rules.find(r => r.id === "santing-equal").when);
+  const stEdge = !!(seg && stRule && stTest.edge);
   let stHead = "";
   if (seg && stRule){
     const s = [...seg].sort((a,b) => b.v - a.v);
-    stHead = stRule.id === "santing-equal"
+    stHead = stEdge ? "臉的三段剛好在「差不多長」和「長短不一樣」的交界上，換個光線再掃可能會變，這次不下結論。" : stRule.id === "santing-equal"
       ? "臉的上、中、下三段差不多長。古書說這樣一生各段比較平穩。"
       : `臉的三段裡，${s[0].k}（${s[0].part}）最長，${s[2].k}最短。古書說長的那段人生（${s[0].life}）比較順，短的那段（${s[2].life}）比較辛苦。`;
   }
@@ -604,16 +624,17 @@ function render(R){
   const PAL = (RULES.palaces || []).map(g => {
     const m = g.measure;
     if (!m) return { g, status:"不判", line: g.why };
-    if (g.blockedBy === "nose_surgery" && R.answers?.noseSurgery) return { g, status:"不判", line:"你勾了鼻子動過，古書講的是天生的樣子。" };
-    if (g.blockedBy === "brow_tattoo" && R.answers?.browTattoo) return { g, status:"不判", line:"你勾了紋眉或修眉，眉形是選出來的，不是天生的。" };
+    if (blockedWhy(g.blockedBy)) return { g, status:"不判", line: blockedWhy(g.blockedBy) + "。" };
     if (m.type === "santing"){
       if (!stRule) return { g, status:"不判", line:"沒有拉髮際線，量不到臉的上段。" };
+      if (stEdge) return { g, status:"交界", line: edgeLine(m.plain) + "。", edge:true, unstable: stTest.unstable };
       const ok = stRule.id === "santing-equal";
       return { g, status: ok ? "成" : "不成", line: ok ? m.yes : m.no };
     }
     const t = test(R.F, m);
     if (t.pass === null || t.pass === undefined) return { g, status:"不判", line:"這次量到的資料不夠。" };
-    return { g, status: t.pass ? "成" : "不成", line: t.pass ? m.yes : m.no, edge: t.edge, unstable: t.unstable };
+    if (t.edge) return { g, status:"交界", line: edgeLine(m.plain) + "。", edge:true, unstable: t.unstable };
+    return { g, status: t.pass ? "成" : "不成", line: t.pass ? m.yes : m.no, edge:false, unstable: t.unstable };
   });
 
   // 重點
@@ -664,14 +685,14 @@ function render(R){
   <h2>五官</h2>
   <div class="card">
     <div class="block">${W.guan}
-      <div class="small" style="margin-top:6px">${tally(OF, "項")}。沒看的不算相符，也不算不同。「十年」只是概數。點每一項看細節。</div>${info({ noQuote:NOQUOTE, plain:W.guan, terms:[W.guanTerms, "古書把耳、眉、眼、鼻、口叫「五官」。"] })}</div>
+      <div class="small" style="margin-top:6px">${tally(OF, "項")}。沒看的、在交界上的，都不算相符，也不算不同。「十年」只是概數。點每一項看細節。</div>${info({ noQuote:NOQUOTE, plain:W.guan, terms:[W.guanTerms, "古書把耳、眉、眼、鼻、口叫「五官」。"] })}</div>
   </div>
   ${OF.map(x => `
   <div class="card">
     <details>
       <summary><div style="flex:1"><div>${tag(x.status)}<b>${x.o.plain}</b></div><div class="small" style="margin-top:4px">${esc(offLine(x))}</div></div></summary>
       <div class="block small">${esc(x.o.governs)}</div>
-      ${x.rows.length ? `<div class="block"><div class="small" style="margin-bottom:6px">你的結果</div>${x.rows.map(r => `<div style="margin:6px 0">${tag(r.pass ? "成" : r.pass === false ? "不成" : "不判")}${esc(r.pass ? r.c.yes : r.pass === false ? r.c.no : r.c.plain + "：這次量不到")}${r.edge ? `<div class="small warn">剛好在交界附近，換個光線再掃可能會變</div>` : ""}${r.unstable ? `<div class="small warn">30 張畫面之間差很多，只當參考</div>` : ""}</div>`).join("")}</div>` : ""}
+      ${x.rows.length ? `<div class="block"><div class="small" style="margin-bottom:6px">你的結果</div>${x.rows.map(r => `<div style="margin:6px 0">${tag(rowStatus(r))}${esc(rowLine(r))}${r.unstable ? `<div class="small warn">30 張畫面之間差很多，只當參考</div>` : ""}</div>`).join("")}</div>` : ""}
       ${x.o.notMeasured ? `<div class="block small">古書還看 ${x.o.notMeasured.length} 處，這次沒看。${x.status === "成" ? "這裡的「相符」只包含看得到的幾條。" : ""}</div>` : ""}
       <div class="block"><div class="small" style="margin-bottom:4px">古書寫的樣子</div>${esc(x.o.baihua)}${info({ noQuote:NOQUOTE, plain:x.o.baihua, source:x.o.source, terms:[x.o.terms], lit:x.o.litPlain, est:x.o.conditions.map(c => estimate(c.feature, c)).join(""), cannot:x.o.notMeasured })}</div>
     </details>
@@ -695,7 +716,7 @@ function render(R){
     <details>
       <summary><div style="flex:1"><div>${tag(x.status)}<b>${esc(x.g.topic)}</b></div><div class="small" style="margin-top:4px">${esc(x.line)}</div></div></summary>
       <div class="block"><div class="small" style="margin-bottom:4px">在臉上哪裡</div>${esc(x.g.where)}</div>
-      ${x.g.measure ? `<div class="block"><div class="small" style="margin-bottom:4px">你的結果</div>${esc(x.line)}${x.edge ? `<div class="small warn">剛好在交界附近，換個光線再掃可能會變</div>` : ""}${x.unstable ? `<div class="small warn">30 張畫面之間差很多，只當參考</div>` : ""}${x.g.notMeasured ? `<div class="small" style="margin-top:6px">${esc(x.g.notMeasured)}</div>` : ""}</div>` : `<div class="block"><div class="small" style="margin-bottom:4px">為什麼這次沒看</div>${esc(x.g.why)}</div>`}
+      ${x.g.measure ? `<div class="block"><div class="small" style="margin-bottom:4px">你的結果</div>${esc(x.line)}${x.unstable ? `<div class="small warn">30 張畫面之間差很多，只當參考</div>` : ""}${x.g.notMeasured ? `<div class="small" style="margin-top:6px">${esc(x.g.notMeasured)}</div>` : ""}</div>` : `<div class="block"><div class="small" style="margin-bottom:4px">為什麼這次沒看</div>${esc(x.g.why)}</div>`}
       ${x.g.yuanwen ? `<div class="block"><div class="small" style="margin-bottom:4px">古書怎麼說</div><p>${esc(x.g.baihua)}</p></div>` : ""}
       <div class="block">${info({ quotes:x.g.yuanwen ? [[x.g.yuanwen, x.g.baihua]] : [], noQuote:x.g.yuanwen ? "" : x.g.noQuoteWhy, source:x.g.source,
         terms:[`古書把這件事叫「${x.g.name}」${x.g.modern ? `，現代叫「${x.g.modern}」` : ""}。`, x.g.whereTerm ? `臉上這個位置，古書叫「${x.g.whereTerm}」。` : "", x.g.terms || "", RULES.palacesTerms].filter(Boolean),
@@ -721,7 +742,7 @@ function render(R){
       <summary><span>算命先生當面會看、照片拍不到的 ${RULES.cannotSee.length} 項</span></summary>
       ${RULES.cannotSee.map(c => `<div class="block"><b>${c.plain}</b><div class="small" style="margin-top:4px">${esc(c.why)}</div>${info({ quotes:c.yuanwen ? [[c.yuanwen, c.baihua]] : [], noQuote:c.yuanwen ? "" : "這一項的原書文字還沒摘錄進規則庫。", terms:[`古書叫「${c.name}」。`] })}</div>`).join("")}
       ${!R.hasHair ? `<div class="block"><b>臉的上段</b><div class="small">沒有拉髮際線</div></div>` : ""}
-      ${R.answers?.browTattoo ? `<div class="block"><b>眉毛</b><div class="small">你勾了紋眉或修眉</div></div>` : ""}
+      ${R.answers?.browTattoo ? `<div class="block"><b>眉毛、兩眉中間</b><div class="small">你勾了紋眉或修眉</div></div>` : ""}
       ${R.answers?.noseSurgery ? `<div class="block"><b>鼻子</b><div class="small">你勾了鼻子動過</div></div>` : ""}
     </details>
   </div>
@@ -747,7 +768,7 @@ function render(R){
   show("report");
   drawAnnot("photo");
   el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { el.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x===b)); drawAnnot(b.dataset.m); });
-  CUR = { R, PAL, stRule, others, seg };
+  CUR = { R, PAL, stRule, stEdge, others, seg };
   $("#goAsk").onclick = openAsk;
   $("#again").onclick = () => show("consent");
   $("#exportJson").onclick = () => {
@@ -800,12 +821,10 @@ function drawAnnot(mode){
 })();
 async function loadRulesOnly(){ if (!RULES) RULES = await (await fetch("rules.json", {cache:"no-cache"})).json(); }
 function renderSaved(r){
-  const byId = Object.fromEntries(RULES.officials.map(o => [o.id, o]));
-  const R = { ...r,
-    officials: r.officials.map(x => ({ o: byId[x.id], status: x.status, why: x.why,
-      rows: x.rows.map(y => ({ c: byId[x.id].conditions.find(c => c.feature === y.f), x: y.x, t: y.t, pass: y.pass, edge:false, unstable: r.F[y.f]?.unstable })) })),
-    rules: RULES.rules.filter(x => r.rules.includes(x.id)) };
   S.answers = r.answers || {};
+  // 存的是數字，結論每次照現在的規則庫重比
+  const R = { ...r,
+    officials: judgeOfficials(r.F), rules: matchRules(r.F, r.hasHair) };
   render(R);
 }
 
@@ -822,27 +841,27 @@ function liunianOf(age){
   const next = T.find(r => xu + 1 >= r.from && xu + 1 <= r.to);
   return { xu, hit, next };
 }
-const statusWord = s => s === "成" ? "相符" : s === "不成" ? "不同" : "沒看";
+const statusWord = s => s === "成" ? "相符" : s === "不成" ? "不同" : s === "交界" ? "在交界上" : "沒看";
 
 function buildPack(profile){
-  const { R, PAL, stRule, others, seg } = CUR;
+  const { R, PAL, stRule, stEdge, others, seg } = CUR;
   const W = RULES.wuxing, T = W.types, wx = R.wx;
   const pack = [];
   const add = (title, text, key) => { pack.push({ id: "E" + (pack.length + 1), title, text, key }); };
   add("這次沒看到的東西", "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看：" + RULES.cannotSee.map(c => `${c.plain}（${c.name}）：${c.why}${c.yuanwen ? `（古書：${c.yuanwen}，白話：${c.baihua}）` : ""}`).join("；") + "。另外，古書的說法沒有經過科學驗證。", "cannot");
   add(`臉形：${wx.host}形人（${T[wx.host].plainShape}）`, `量測：臉長是寬的 ${R.F.face_aspect.v.toFixed(2)} 倍，額寬是下顎的 ${R.F.fore_jaw.v.toFixed(2)} 倍，下顎角 ${R.F.jaw_angle.v.toFixed(0)} 度。五形裡最接近${wx.host}形（${T[wx.host].plainShape}）${wx.guest ? `，也帶一點${wx.guest}形` : ""}${wx.weak ? "，但特徵不明顯" : ""}。用比例算哪一形是本工具暫定的算法；五行形本來要看全身和膚色，這裡只是臉形推估。\n古書：${T[wx.host].yuanwen}（白話：${T[wx.host].plainLine}）\n${W.notFaultPlain}\n${W.terms}${wx.rel ? "\n兼形（帶到的那一形）：" + wx.rel.lines.join(" ") : ""}\n出處：${W.source}`, "wuxing");
-  add("五官怎麼算", W.guan + W.guanTerms + "「十年」只是概數。沒看的不能當成相符，也不能當成不同。", "guan");
+  add("五官怎麼算", W.guan + W.guanTerms + "「十年」只是概數。沒看的、在交界上的，都不能當成相符，也不能當成不同。", "guan");
   R.officials.forEach(x => {
-    const rows = x.rows.map(r => `${r.pass ? "相符" : "不同"}：${r.pass ? r.c.yes : r.c.no}（古書的條件：${r.c.label}）`).join("；");
+    const rows = x.rows.map(r => `${statusWord(rowStatus(r))}：${rowLine(r)}（古書的條件：${r.c.label}）`).join("；");
     add(`五官・${x.o.plain}（${x.o.name}）：${x.status === "成" ? "量得到的條件都相符" : statusWord(x.status)}`, `${x.o.name}：${x.o.governs}。\n這次結果：${x.status === "不判" ? "沒看，" + x.why : rows}${x.o.notMeasured ? `\n量不到的：${x.o.notMeasured.join("、")}` : ""}\n古書寫的樣子（白話整理）：${x.o.baihua}\n${x.o.terms}\n出處：${x.o.source}`, x.o.id);
   });
   if (seg && stRule){
-    add(`臉的三段（三停）：${stRule.id === "santing-equal" ? "差不多長" : "長短不一"}`, seg.map(s => `${s.k}（${s.part}，管${s.life}）是平均的 ${s.v.toFixed(2)} 倍`).join("；") + `。\n古書：${stRule.yuanwen}\n白話：${stRule.baihua}\n${stRule.terms}\n出處：${stRule.source}`, "santing");
+    add(`臉的三段（三停）：${stEdge ? "在交界上，不下結論" : stRule.id === "santing-equal" ? "差不多長" : "長短不一"}`, seg.map(s => `${s.k}（${s.part}，管${s.life}）是平均的 ${s.v.toFixed(2)} 倍`).join("；") + `。\n古書：${stRule.yuanwen}\n白話：${stRule.baihua}\n${stRule.terms}\n出處：${stRule.source}`, "santing");
   } else add("臉的三段（三停）：沒看", "沒有拉髮際線，量不到臉的上段。", "santing");
   others.forEach(r => add(r.headline || r.part, `${r.baihua}${r.yuanwen ? "\n古書：" + r.yuanwen : ""}\n${r.terms}${r.experimental ? "\n這是實驗項目，深度還量不準，只當參考。" : ""}${r.note ? "\n" + r.note : ""}\n出處：${r.source}`, r.id));
   PAL.forEach(x => {
     const g = x.g;
-    add(`十二件事（十二宮）・${g.topic}（${g.name}）：${x.status === "成" ? "量得到的部分相符" : x.status === "不成" ? "量得到的部分不同" : "沒看"}`, `位置：${g.where}${g.whereTerm ? `（古書叫${g.whereTerm}）` : ""}。\n這次結果：${x.line}${g.notMeasured && x.status !== "不判" ? "\n" + g.notMeasured : ""}${g.yuanwen ? `\n古書：${g.yuanwen}（白話：${g.baihua}）` : ""}${g.terms ? "\n" + g.terms : ""}${g.note ? "\n" + g.note : ""}${g.source ? "\n出處：" + g.source : ""}`, "gong-" + g.id);
+    add(`十二件事（十二宮）・${g.topic}（${g.name}）：${x.status === "成" ? "量得到的部分相符" : x.status === "不成" ? "量得到的部分不同" : x.status === "交界" ? "量得到的部分在交界上" : "沒看"}`, `位置：${g.where}${g.whereTerm ? `（古書叫${g.whereTerm}）` : ""}。\n這次結果：${x.line}${g.notMeasured && x.status !== "不判" ? "\n" + g.notMeasured : ""}${g.yuanwen ? `\n古書：${g.yuanwen}（白話：${g.baihua}）` : ""}${g.terms ? "\n" + g.terms : ""}${g.note ? "\n" + g.note : ""}${g.source ? "\n出處：" + g.source : ""}`, "gong-" + g.id);
   });
   const ln = liunianOf(profile?.age);
   if (ln){

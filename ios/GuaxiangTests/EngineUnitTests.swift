@@ -192,6 +192,94 @@ final class EngineUnitTests: XCTestCase {
         XCTAssertFalse(Pack.build(report, profile: nil).isEmpty)
     }
 
+    // MARK: 交界、動過的部位、不穩（2026-11-25）
+
+    private func rulesFile() throws -> Rules {
+        let bundle = Bundle(for: EngineUnitTests.self)
+        let url = try XCTUnwrap(bundle.url(forResource: "rules", withExtension: "json"))
+        return try Rules.decode(Data(contentsOf: url))
+    }
+
+    /// 有拿來對照門檻的特徵，都要寫交界多寬
+    func testEveryJudgedFeatureHasEdge() throws {
+        let rules = try rulesFile()
+        let used = rules.officials.flatMap(\.conditions) + rules.palaces.compactMap(\.measure)
+            + rules.rules.flatMap(\.when.conditions)
+        for c in used {
+            guard let key = c.feature else { continue }
+            XCTAssertGreaterThan(rules.features[key]?.edge ?? 0, 0, key)
+        }
+    }
+
+    /// 門檻上下差一點點，不能一次相符一次不同：兩次都要是在交界上
+    func testEdgeIsNeitherSameNorDifferent() throws {
+        let rules = try rulesFile()
+        for (key, line, id) in [("nose_dev", 0.015, "caibo"), ("brow_eye", 0.1, "xiongdi"), ("santing_dev", 0.1, "xiangmao")] {
+            for delta in [-0.5, 0.5] {
+                var m = Sample.measurement(rulesVersion: rules.version)
+                m.F[key]?.v = line + delta * (rules.features[key]?.edge ?? 0)
+                let report = Report(measurement: m, rules: rules)
+                XCTAssertEqual(report.palaces.first { $0.id == id }?.status, .edge, "\(id) \(delta)")
+                if key == "santing_dev" {
+                    XCTAssertTrue(report.santingOnEdge)
+                    XCTAssertEqual(report.santingRule?.id, "santing-equal")
+                }
+            }
+        }
+    }
+
+    /// 有一條明確不同，另一條在交界上：整官是不同
+    func testClearDifferenceWinsOverEdge() throws {
+        let rules = try rulesFile()
+        var m = Sample.measurement(rulesVersion: rules.version)
+        m.F["brow_eye"]?.v = 0.1
+        XCTAssertEqual(Report(measurement: m, rules: rules).officials.first { $0.id == "guan-brow" }?.status, .edge)
+        m.F["brow_tail"]?.v = -15
+        XCTAssertEqual(Report(measurement: m, rules: rules).officials.first { $0.id == "guan-brow" }?.status, .fail)
+    }
+
+    /// 修過眉，兩眉中間也不看：鼻子不下結論、整體運勢沒看；鼻樑那一條照常
+    func testBrowDoneBlocksBetweenBrows() throws {
+        let rules = try rulesFile()
+        var m = Sample.measurement(rulesVersion: rules.version)
+        m.answers.browTattoo = true
+        let report = Report(measurement: m, rules: rules)
+        let nose = try XCTUnwrap(report.officials.first { $0.id == "guan-nose" })
+        XCTAssertEqual(nose.status, .unjudged)
+        XCTAssertEqual(nose.rows.map(\.status), [.pass, .unjudged])
+        XCTAssertNotNil(nose.rows[1].blocked)
+        XCTAssertEqual(report.palaces.first { $0.id == "ming" }?.status, .unjudged)
+        XCTAssertEqual(report.palaces.first { $0.id == "caibo" }?.status, .pass)
+        XCTAssertTrue(report.note(condition: nose.rows[1].condition, of: nose).estimates.allSatisfy(\.warnings.isEmpty))
+    }
+
+    /// 鼻子動過，「鼻子明顯比顴骨高」那一條也不能出現
+    func testNoseDoneBlocksNoseRule() throws {
+        let rules = try rulesFile()
+        var m = Sample.measurement(rulesVersion: rules.version)
+        m.F["nose_prom"]?.v = 0.4
+        m.F["cheek_prom"]?.v = 0.05
+        XCTAssertTrue(Report(measurement: m, rules: rules).others.contains { $0.id == "zhongyue-gufeng" })
+        m.answers.noseSurgery = true
+        XCTAssertFalse(Report(measurement: m, rules: rules).others.contains { $0.id == "zhongyue-gufeng" })
+    }
+
+    /// 鼻樑、嘴角的數字接近 0，跳得厲害也要標得到不穩
+    func testSmallValuesCanBeUnstable() throws {
+        let rules = try rulesFile()
+        let one: [String: Double] = ["nose_dev": 0.010, "mouth_corner": -0.02]
+        let two: [String: Double] = ["nose_dev": 0.019, "mouth_corner": 0.01]
+        let near: [String: Double] = ["nose_dev": 0.0149, "mouth_corner": -0.014]
+        let same: [String: Double] = ["nose_dev": 0.0151, "mouth_corner": -0.013]
+        let shaky = (0..<30).map { $0 % 2 == 0 ? one : two }
+        let steady = (0..<30).map { $0 % 2 == 0 ? near : same }
+        let a = Stats.summarize(shaky, rules: rules), b = Stats.summarize(steady, rules: rules)
+        for key in ["nose_dev", "mouth_corner"] {
+            XCTAssertEqual(a[key]?.unstable, true, key)
+            XCTAssertEqual(b[key]?.unstable, false, key)
+        }
+    }
+
     // MARK: 依據標籤
 
     func testCitationsKeepValidAndDropUnknown() {

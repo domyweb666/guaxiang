@@ -53,14 +53,12 @@ enum Pack {
             add("臉形：沒看", "這次量到的資料不夠，沒有看臉形。", "wuxing")
         }
 
-        add("五官怎麼算", W.guan + W.guanTerms + "「十年」只是概數。沒看的不能當成相符，也不能當成不同。", "guan")
+        add("五官怎麼算", W.guan + W.guanTerms + "「十年」只是概數。沒看的、在交界上的，都不能當成相符，也不能當成不同。", "guan")
 
         for x in report.officials {
             let o = x.official
-            let rows = x.rows.map { row -> String in
-                let pass = row.result.pass == true
-                let said = (pass ? row.condition.yes : row.condition.no) ?? ""
-                return "\(pass ? "相符" : "不同")：\(said)（古書的條件：\(row.condition.label ?? "")）"
+            let rows = x.rows.map { row in
+                "\(row.status.word)：\(row.line)（古書的條件：\(row.condition.label ?? "")）"
             }.joined(separator: "；")
             let verdict = x.status == .pass ? "量得到的條件都相符" : x.status.word
             var text = "\(o.name)：\(o.governs)。\n這次結果：" + (x.status == .unjudged ? "沒看，" + (x.why ?? "") : rows)
@@ -70,9 +68,10 @@ enum Pack {
         }
 
         if let segments = report.segments, let st = report.santingRule {
+            let santing = report.santingOnEdge ? "在交界上，不下結論" : st.id == "santing-equal" ? "差不多長" : "長短不一"
             let parts = segments.map { "\($0.k)（\($0.part)，管\($0.life)）是平均的 \(fixed($0.v, 2)) 倍" }
             add(
-                "臉的三段（三停）：" + (st.id == "santing-equal" ? "差不多長" : "長短不一"),
+                "臉的三段（三停）：" + santing,
                 parts.joined(separator: "；")
                     + "。\n古書：\(st.yuanwen ?? "")\n白話：\(st.baihua)\n\(st.terms)\n出處：\(st.source)",
                 "santing")
@@ -96,6 +95,7 @@ enum Pack {
             switch x.status {
             case .pass: verdict = "量得到的部分相符"
             case .fail: verdict = "量得到的部分不同"
+            case .edge: verdict = "量得到的部分在交界上"
             case .unjudged: verdict = "沒看"
             }
             let placeTerm = g.whereTerm.map { "（古書叫\($0)）" } ?? ""

@@ -142,7 +142,7 @@ struct ReportSectionContent: View {
             PlainLine(subject: "五官", note: { report.officialsNote }) {
                 Text(rules.wuxing.guan).font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }
-            Note("沒看的不算相符，也不算不同。「十年」只是概數。")
+            Note("沒看的、在交界上的，都不算相符，也不算不同。「十年」只是概數。")
             RulerGuide()
         }
         .padding(.horizontal, Theme.tight)
@@ -198,13 +198,14 @@ struct ReportSectionContent: View {
 
     private func rowLine(_ row: ConditionRow, of x: OfficialResult) -> some View {
         let c = row.condition
-        let ruler = report.ruler(c)
+        // 勾了「動過」而沒看的那一條，量得到也不畫
+        let ruler = row.status == .unjudged ? nil : report.ruler(c)
         return HStack(alignment: .center, spacing: Theme.group) {
-            if ruler == nil { VerdictMark(row.result.pass) }
+            if ruler == nil { VerdictMark(status: row.status) }
             VStack(alignment: .leading, spacing: Theme.tight / 2) {
-                Text(rowText(row)).fixedSize(horizontal: false, vertical: true)
-                if let ruler { RulerView(ruler: ruler, status: Status(row.result.pass)) }
-                flags(edge: row.result.edge, unstable: row.result.unstable)
+                Text(row.line).fixedSize(horizontal: false, vertical: true)
+                if let ruler { RulerView(ruler: ruler, status: row.status) }
+                unstableFlag(row.result.unstable)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             InfoButton(subject: c.plain ?? x.official.plain) { report.note(condition: c, of: x) }
@@ -213,14 +214,8 @@ struct ReportSectionContent: View {
         .padding(.top, Theme.item)
     }
 
-    private func rowText(_ row: ConditionRow) -> String {
-        guard let pass = row.result.pass else { return "\(row.condition.plain ?? "")：這次量不到" }
-        return (pass ? row.condition.yes : row.condition.no) ?? ""
-    }
-
     /// 結論可能會變的提醒留在正面，數字在小圓鈕裡
-    @ViewBuilder private func flags(edge: Bool, unstable: Bool) -> some View {
-        if edge { Note("剛好在交界附近，換個光線再掃可能會變", warn: true) }
+    @ViewBuilder private func unstableFlag(_ unstable: Bool) -> some View {
         if unstable { Note("\(m.frames) 張畫面之間差很多，只當參考", warn: true) }
     }
 
@@ -275,7 +270,7 @@ struct ReportSectionContent: View {
             PlainLine(subject: "人生十二件事", note: { report.palacesNote }) {
                 VerdictSummary(tally: report.palaceTally, unit: "件")
             }
-            Note("沒看的不算相符，也不算不同。")
+            Note("沒看的、在交界上的，都不算相符，也不算不同。")
             RulerGuide()
         }
         .padding(.horizontal, Theme.tight)
@@ -296,7 +291,7 @@ struct ReportSectionContent: View {
                 Note("看臉上的" + g.place)
                 Text(x.line).fixedSize(horizontal: false, vertical: true)
                 if let ruler { RulerView(ruler: ruler, status: x.status) }
-                flags(edge: x.edge, unstable: x.unstable)
+                unstableFlag(x.unstable)
                 if let baihua = g.baihua { Note("古書說：" + baihua) }
             }
         }
@@ -353,7 +348,7 @@ struct ReportSectionContent: View {
     private var skipped: [(String, String)] {
         var out: [(String, String)] = []
         if !m.hasHair { out.append(("臉的上段", "沒有拉髮際線")) }
-        if m.answers.browTattoo { out.append(("眉毛", "你勾了紋眉或修眉")) }
+        if m.answers.browTattoo { out.append(("眉毛、兩眉中間", "你勾了紋眉或修眉")) }
         if m.answers.noseSurgery { out.append(("鼻子", "你勾了鼻子動過")) }
         return out
     }

@@ -60,6 +60,18 @@ extension BookNote {
         }
     }
 
+    /// 交界的寬度。比一般數字多留幾位，不然鼻樑的 0.15% 會被四捨五入掉
+    static func edgeText(_ def: FeatureDef) -> String {
+        let value = def.edge ?? 0
+        let shown: (Double) -> String = { v in
+            var s = String(format: "%.4f", v)
+            while s.hasSuffix("0") { s.removeLast() }
+            if s.hasSuffix(".") { s.removeLast() }
+            return s
+        }
+        return def.unit == "%" ? shown(value * 100) + "%" : "\(shown(value)) \(def.unit)"
+    }
+
     /// 一個量測是怎麼來的。condition 有給就寫對照的線；outcome 是過了線會寫什麼
     static func estimate(
         _ key: String, condition: Condition? = nil, outcome: String = "就寫「相符」", rules: Rules, report: Report?
@@ -80,9 +92,12 @@ extension BookNote {
         }
         if let condition, let at = lineValue(condition, rules: rules) {
             numbers.append("對照的線：\(text(at, unit: def.unit))，\(side(condition.op))\(outcome)。")
+            numbers.append("離這條線不超過 \(edgeText(def)) 算在交界上，不下結論。")
             numbers.append(provisional + (condition.th.flatMap { rules.thresholds[$0]?.plain } ?? ""))
-            if let report, Judge(rules: rules).test(report.measurement.F, condition).edge {
-                warnings.append("剛好在對照的線附近，換個光線再掃可能會變。")
+            if let report, report.measurement.answers.blockedWhy(condition.blockedBy) == nil,
+                Judge(rules: rules).test(report.measurement.F, condition).edge
+            {
+                warnings.append("剛好在交界上，換個光線再掃可能會變。")
             }
         }
         return Estimate(name: def.plainName, method: def.plainFormula, numbers: numbers, warnings: warnings)
@@ -218,7 +233,7 @@ extension Report {
         note.noQuote = BookNote.notTranscribed
         note.plain = rules.wuxing.guan
         note.terms = [rules.wuxing.guanTerms, "古書把耳、眉、眼、鼻、口叫「五官」。"]
-        note.remarks = ["「十年」只是概數。", "沒看的不算相符，也不算不同。"]
+        note.remarks = ["「十年」只是概數。", "沒看的、在交界上的，都不算相符，也不算不同。"]
         return note
     }
 
@@ -257,7 +272,7 @@ extension Report {
         note.plain = rules.palacesNote
         note.source = rules.palaces.compactMap(\.source).first
         note.terms = [rules.palacesTerms]
-        note.remarks = ["沒看的不算相符，也不算不同。"]
+        note.remarks = ["沒看的、在交界上的，都不算相符，也不算不同。"]
         return note
     }
 

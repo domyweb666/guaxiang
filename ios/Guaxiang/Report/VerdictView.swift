@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// 「跟古書寫的相符、不同、這次沒看」在畫面上長什麼樣，全部集中在這個檔。
+/// 「跟古書寫的相符、不同、在交界上、這次沒看」在畫面上長什麼樣，全部集中在這個檔。
 /// 要換樣式（形狀、顏色、排法）只改這裡，其他畫面只呼叫，不自己畫。
 /// 多米 2026-11-25 選 B 刻度尺：看得到的畫尺，一段是古書寫的樣子，圓點是你的位置。
 /// 不用對錯的符號和顏色，旁邊一定有字，旁白唸字。沒有尺的（沒看、量不到）才用小標籤。
 
-/// 小圓點：相符＝實心、不同＝空心圈、沒看＝虛線圈
+/// 小圓點：相符＝實心、不同＝空心圈、在交界上＝左半邊實心、沒看＝虛線圈
 struct VerdictDot: View {
     let status: Status
     @ScaledMetric(relativeTo: .footnote) var side: CGFloat = Theme.markDot
@@ -22,6 +22,9 @@ struct VerdictDot: View {
             Circle().fill(Theme.accent)
         case .fail:
             Circle().strokeBorder(Theme.accent, lineWidth: Theme.markWidth)
+        case .edge:
+            Circle().strokeBorder(Theme.accent, lineWidth: Theme.markWidth)
+                .background(Circle().trim(from: 0.25, to: 0.75).fill(Theme.accent))
         case .unjudged:
             Circle().strokeBorder(Theme.secondary, style: StrokeStyle(lineWidth: Theme.hairline, dash: Theme.verdictDash))
         }
@@ -31,10 +34,6 @@ struct VerdictDot: View {
 /// 條件列前面的標記：圓點加字
 struct VerdictMark: View {
     let status: Status
-
-    init(_ pass: Bool?) {
-        status = Status(pass)
-    }
 
     var body: some View {
         HStack(spacing: Theme.tight) {
@@ -70,7 +69,7 @@ struct VerdictTag: View {
     }
 }
 
-/// 摘要：三種各幾項
+/// 摘要：四種各幾項
 struct VerdictSummary: View {
     let tally: Tally
     /// 項、件
@@ -86,7 +85,7 @@ struct VerdictSummary: View {
 /// 頁首那兩句：尺怎麼看、分界是誰定的
 struct RulerGuide: View {
     var body: some View {
-        Note("紅色那一段是古書寫的樣子，圓點是你的位置。古書沒有給數字，分界和尺的兩端是本工具暫定的。")
+        Note("紅色那一段是古書寫的樣子，圓點是你的位置。圓點落在分界線旁邊那一小段淡色裡，就是在交界上，不算相符也不算不同。古書沒有給數字，分界、交界的寬度和尺的兩端都是本工具暫定的。")
     }
 }
 
@@ -108,7 +107,16 @@ struct RulerView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("刻度尺，從\(ruler.left)到\(ruler.right)")
         .accessibilityValue(
-            status == .pass ? "你的位置在古書寫的那一段裡面，相符" : "你的位置在古書寫的那一段外面，不同")
+            spoken)
+    }
+
+    private var spoken: String {
+        switch status {
+        case .pass: return "你的位置在古書寫的那一段裡面，相符"
+        case .fail: return "你的位置在古書寫的那一段外面，不同"
+        case .edge: return "你的位置剛好在交界上，不算相符也不算不同"
+        case .unjudged: return "這次沒看"
+        }
     }
 
     private var bar: some View {
@@ -124,10 +132,14 @@ struct RulerView: View {
         let dot = half + CGFloat(ruler.position) * room
         let start = ruler.bandOnRight ? edge : 0
         let end = ruler.bandOnRight ? width : edge
+        // 交界那一小段：先用底色蓋掉，再鋪一層淡的
+        let low = half + CGFloat(ruler.buffer.lowerBound) * room
+        let high = half + CGFloat(ruler.buffer.upperBound) * room
         return ZStack(alignment: .leading) {
             ZStack(alignment: .leading) {
                 Theme.fill
                 Theme.rulerBand.frame(width: max(0, end - start)).offset(x: start)
+                Theme.rulerBuffer.frame(width: max(0, high - low)).offset(x: low)
             }
             .frame(height: Theme.rulerTrack)
             .clipShape(Capsule())
@@ -153,6 +165,9 @@ enum VerdictShort {
     }
 
     static func rest(_ tally: Tally, _ unit: String) -> [String] {
-        ["\(tally.different) \(unit)不同", "\(tally.unseen) \(unit)沒看"]
+        // 格子小，在交界上是 0 就不放；完整一句一定四種都寫
+        ["\(tally.different) \(unit)不同"]
+            + (tally.onEdge > 0 ? ["\(tally.onEdge) \(unit)在交界上"] : [])
+            + ["\(tally.unseen) \(unit)沒看"]
     }
 }

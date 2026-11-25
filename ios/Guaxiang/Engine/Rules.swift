@@ -38,6 +38,8 @@ struct FeatureDef: Decodable {
     let plainName: String
     let plainFormula: String
     let scale: RulerScale?
+    /// 交界的一半寬度：離門檻不超過它，就不算相符也不算不同
+    let edge: Double?
 }
 
 /// 刻度尺的兩端：最左和最右各是多少、寫什麼字。暫定值，只管畫面
@@ -69,6 +71,8 @@ struct Condition: Decodable {
     let type: String?
     /// 不畫刻度尺：原文沒有寫這個樣子，畫了會像古書說的
     let noRuler: Bool?
+    /// 掃描前勾了哪一題，這一條就不看
+    let blockedBy: String?
 }
 
 struct Official: Decodable, Identifiable {
@@ -95,6 +99,9 @@ struct Rule: Decodable, Identifiable {
     let when: When
     let needHairline: Bool?
     let experimental: Bool?
+    let blockedBy: String?
+    /// 落在交界時放這一條的原文（三段用）
+    let onEdge: Bool?
     let yuanwen: String?
     /// 原文逐句的白話
     let yuanwenPlain: String?

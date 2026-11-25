@@ -16,6 +16,8 @@ enum Theme {
     static let accentSoft = dynamic(0xF6E4DF, 0x3A1E1B)
     /// 刻度尺上古書寫的那一段
     static let rulerBand = dynamic(0xE9B8AE, 0x7A3A32)
+    /// 交界那一小段：比古書那一段淡、比尺的底深
+    static let rulerBuffer = dynamic(0xF3DCD6, 0x4F2E2A)
     /// 提醒：琥珀（不穩、實驗、完整版的鎖）。不用紅，避免跟主色混在一起；判讀結果不用這個色
     static let bad = dynamic(0x7A4B00, 0xE9C46A)
     static let badSoft = dynamic(0xF6EBD5, 0x3A2F17)

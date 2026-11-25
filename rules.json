@@ -1,6 +1,6 @@
 {
-  "version": "0.5.1",
-  "note": "瓜相 MVP 規則庫。門檻全部是暫定值，等收到 50 人資料後用排名重切。yuanwen 是古書原文，一字不動。給人看的欄位（baihua、plain、plainName、plainFormula、yes、no、why、notMeasured、terms、litPlain）只寫白話，不寫章節號和點位編號；章節號放 ref，公式的點位編號放 formula。features 的 scale 是刻度尺兩端（from 是最左、to 是最右，可以由大到小），暫定值，只管畫面，不影響判讀。measure 寫 noRuler 就不畫尺。",
+  "version": "0.6.0",
+  "note": "瓜相 MVP 規則庫。門檻全部是暫定值，等收到 50 人資料後用排名重切。features 的 edge 是交界的一半寬度：量到的值離門檻不超過它，就寫「在交界上」，不算相符也不算不同；現在是尺寬的 5%（沒有尺的兩項另定），等有連掃三次的資料再換成實測誤差。yuanwen 是古書原文，一字不動。給人看的欄位（baihua、plain、plainName、plainFormula、yes、no、why、notMeasured、terms、litPlain）只寫白話，不寫章節號和點位編號；章節號放 ref，公式的點位編號放 formula。features 的 scale 是刻度尺兩端（from 是最左、to 是最右，可以由大到小），暫定值，只管畫面和穩不穩（四分位距跟尺寬比），不影響相符或不同。measure 寫 noRuler 就不畫尺。",
   "features": {
     "santing_U": {
       "name": "上停",
@@ -29,7 +29,8 @@
       "unit": "%",
       "plainName": "三段裡離平均最遠的一段",
       "plainFormula": "上段、中段、下段各跟平均長度比，取差最多的那一段。",
-      "scale": { "from": 0.2, "to": 0, "left": "差很多", "right": "差不多長" }
+      "scale": { "from": 0.2, "to": 0, "left": "差很多", "right": "差不多長" },
+      "edge": 0.01
     },
     "face_aspect": {
       "name": "臉長寬比",
@@ -58,7 +59,8 @@
       "unit": "倍",
       "plainName": "眉尾比眼尾多出多少",
       "plainFormula": "眉尾比眼尾再往外多少，除以眼睛的長度，左右取平均。0 就是剛好跟眼尾齊。",
-      "scale": { "from": -0.3, "to": 0.5, "left": "短", "right": "長" }
+      "scale": { "from": -0.3, "to": 0.5, "left": "短", "right": "長" },
+      "edge": 0.04
     },
     "brow_tail": {
       "name": "眉尾角度",
@@ -66,7 +68,8 @@
       "unit": "度",
       "plainName": "眉尾的高低",
       "plainFormula": "從眉頭連到眉尾，看這條線斜幾度，左右取平均。眉尾比眉頭高是正的，低是負的。",
-      "scale": { "from": -20, "to": 20, "left": "往下", "right": "往上" }
+      "scale": { "from": -20, "to": 20, "left": "往下", "right": "往上" },
+      "edge": 2
     },
     "yintang": {
       "name": "印堂寬 ÷ 眼長",
@@ -74,7 +77,8 @@
       "unit": "倍",
       "plainName": "兩眉中間是眼睛的幾倍寬",
       "plainFormula": "兩邊眉頭之間的距離，除以一隻眼睛的平均長度。",
-      "scale": { "from": 0.6, "to": 1.6, "left": "窄", "right": "寬" }
+      "scale": { "from": 0.6, "to": 1.6, "left": "窄", "right": "寬" },
+      "edge": 0.05
     },
     "eye_lw": {
       "name": "眼長 ÷ 眼高",
@@ -82,7 +86,8 @@
       "unit": "倍",
       "plainName": "眼睛長度是高度的幾倍",
       "plainFormula": "眼頭到眼尾的長度，除以上下眼皮之間的距離，左右取平均。",
-      "scale": { "from": 2.2, "to": 4.2, "left": "圓", "right": "細長" }
+      "scale": { "from": 2.2, "to": 4.2, "left": "圓", "right": "細長" },
+      "edge": 0.1
     },
     "nose_dev": {
       "name": "鼻樑偏離",
@@ -90,7 +95,8 @@
       "unit": "%",
       "plainName": "鼻樑離直線多遠",
       "plainFormula": "從鼻根到鼻尖拉一條直線，看鼻樑中間離這條線最遠多少，再除以臉寬。轉頭不會影響。",
-      "scale": { "from": 0.03, "to": 0, "left": "有弧度", "right": "直" }
+      "scale": { "from": 0.03, "to": 0, "left": "有弧度", "right": "直" },
+      "edge": 0.0015
     },
     "mouth_ipd": {
       "name": "嘴寬 ÷ 瞳距",
@@ -98,7 +104,8 @@
       "unit": "倍",
       "plainName": "嘴寬是瞳孔距離的幾倍",
       "plainFormula": "兩邊嘴角的距離，除以兩眼瞳孔的距離。",
-      "scale": { "from": 0.65, "to": 1.25, "left": "窄", "right": "寬" }
+      "scale": { "from": 0.65, "to": 1.25, "left": "窄", "right": "寬" },
+      "edge": 0.03
     },
     "mouth_corner": {
       "name": "嘴角高度",
@@ -106,7 +113,8 @@
       "unit": "%",
       "plainName": "嘴角的高低",
       "plainFormula": "嘴角比上下唇中間高多少，除以嘴寬。嘴角比較高是正的，低是負的。",
-      "scale": { "from": -0.06, "to": 0.06, "left": "往下", "right": "往上" }
+      "scale": { "from": -0.06, "to": 0.06, "left": "往下", "right": "往上" },
+      "edge": 0.006
     },
     "lip_thick": {
       "name": "唇厚 ÷ 嘴寬",
@@ -114,7 +122,8 @@
       "unit": "倍",
       "plainName": "嘴唇的厚薄",
       "plainFormula": "上唇和下唇的厚度加起來，除以嘴寬。",
-      "scale": { "from": 0.1, "to": 0.4, "left": "薄", "right": "厚" }
+      "scale": { "from": 0.1, "to": 0.4, "left": "薄", "right": "厚" },
+      "edge": 0.015
     },
     "renzhong": {
       "name": "人中 ÷ 下停",
@@ -128,14 +137,16 @@
       "formula": "(兩顴前點 50/280 的平均深度 − 鼻尖 1 的深度) ÷ 臉寬。深度還量不準",
       "unit": "倍",
       "plainName": "鼻子比顴骨往前多少（實驗）",
-      "plainFormula": "鼻尖比兩邊顴骨往前多少，除以臉寬。深度還量不準，只當參考。"
+      "plainFormula": "鼻尖比兩邊顴骨往前多少，除以臉寬。深度還量不準，只當參考。",
+      "edge": 0.01
     },
     "cheek_prom": {
       "name": "顴突出（實驗）",
       "formula": "(臉側 234/454 的平均深度 − 顴前點 50/280 的平均深度) ÷ 臉寬",
       "unit": "倍",
       "plainName": "顴骨比臉側往前多少（實驗）",
-      "plainFormula": "兩邊顴骨比臉側往前多少，除以臉寬。深度還量不準，只當參考。"
+      "plainFormula": "兩邊顴骨比臉側往前多少，除以臉寬。深度還量不準，只當參考。",
+      "edge": 0.01
     }
   },
   "thresholds": {
@@ -196,7 +207,7 @@
     },
     "unstable_spread": {
       "value": 0.06,
-      "note": "30 張畫面的四分位距 ÷ 中位數 > 6% 標「這項不穩」",
+      "note": "有尺的特徵：30 張畫面的四分位距 ÷ 尺寬 > 6% 標「這項不穩」；沒有尺的：四分位距 ÷ 中位數 > 6%（中位數要大於 0.02）；角度類：四分位距 > 3 度",
       "plain": "30 張畫面之間差超過這個幅度，就提醒這一項不穩。"
     }
   },
@@ -305,7 +316,8 @@
           "label": "印堂平闊",
           "yes": "兩眉中間比一隻眼睛寬",
           "no": "兩眉中間大約一隻眼睛寬，或窄一點",
-          "plain": "兩眉中間寬不寬"
+          "plain": "兩眉中間寬不寬",
+          "blockedBy": "brow_tattoo"
         }
       ],
       "notMeasured": [
@@ -374,6 +386,7 @@
     {
       "id": "santing-equal",
       "part": "三停",
+      "onEdge": true,
       "when": {
         "feature": "santing_dev",
         "op": "<=",
@@ -438,6 +451,7 @@
     {
       "id": "zhongyue-gufeng",
       "part": "鼻（中嶽）",
+      "blockedBy": "nose_surgery",
       "experimental": true,
       "when": {
         "all": [
@@ -588,7 +602,8 @@
         "op": "<=",
         "th": "nose_straight",
         "yes": "鼻樑是直的，跟古書寫的一樣",
-        "no": "鼻樑帶一點弧度，古書寫的是直"
+        "no": "鼻樑帶一點弧度，古書寫的是直",
+        "plain": "鼻樑直不直"
       },
       "blockedBy": "nose_surgery",
       "notMeasured": "鼻子高不高、鼻頭鼻翼飽不飽滿要看深度，深度還量不準，所以這次只看了直不直。",
@@ -633,8 +648,10 @@
         "th": "yintang_wide",
         "yes": "兩眉中間比一隻眼睛寬，跟古書說的寬一樣",
         "no": "兩眉中間大約一隻眼睛寬，或窄一點，古書說的是寬",
+        "plain": "兩眉中間寬不寬",
         "noRuler": true
       },
+      "blockedBy": "brow_tattoo",
       "notMeasured": "古書還看皮膚的光亮，相機量不準，所以這次只看了寬窄。",
       "source": "《麻衣相法》〈十二宮〉",
       "ref": "2-5",
@@ -675,7 +692,8 @@
         "op": ">=",
         "th": "brow_long",
         "yes": "眉毛比眼睛長，跟古書寫的一樣",
-        "no": "眉毛大約到眼尾，或短一點，古書寫的是比眼睛長"
+        "no": "眉毛大約到眼尾，或短一點，古書寫的是比眼睛長",
+        "plain": "眉毛有沒有比眼睛長"
       },
       "blockedBy": "brow_tattoo",
       "notMeasured": "古書還看眉毛秀不秀氣、疏不疏，相機量不到。",
@@ -739,7 +757,8 @@
       "measure": {
         "type": "santing",
         "yes": "臉的上、中、下三段差不多長",
-        "no": "臉的上、中、下三段長短不一樣"
+        "no": "臉的上、中、下三段長短不一樣",
+        "plain": "臉的三段一不一樣長"
       },
       "notMeasured": "古書還看額頭、鼻子、兩邊顴骨、下巴的高低，要看深度，這次只量了三段長短。",
       "source": "《麻衣相法》〈十二宮〉",

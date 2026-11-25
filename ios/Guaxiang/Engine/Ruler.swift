@@ -7,6 +7,8 @@ struct Ruler: Equatable {
     let position: Double
     /// 分界線的位置
     let edge: Double
+    /// 交界那一小段。圓點落在裡面，不算相符也不算不同
+    let buffer: ClosedRange<Double>
     /// 古書寫的那一段在分界線的右邊還是左邊
     let bandOnRight: Bool
     let left: String
@@ -28,6 +30,8 @@ struct Ruler: Equatable {
         let at: (Double) -> Double = { max(0, min(1, ($0 - scale.from) / span)) }
         position = at(value)
         edge = at(line)
+        let half = abs((rules.features[key]?.edge ?? 0) / span)
+        buffer = max(0, edge - half)...min(1, edge + half)
         bandOnRight = op.hasPrefix(">") == (span > 0)
         left = scale.left
         right = scale.right

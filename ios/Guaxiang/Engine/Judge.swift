@@ -14,49 +14,54 @@ struct Answers: Codable, Equatable {
     var browTattoo = false
     var noseSurgery = false
     var noGlasses = true
+
+    /// 掃描前勾了「動過」，用到那個部位的項目都不看。沒勾就是 nil
+    func blockedWhy(_ key: String?) -> String? {
+        switch key {
+        case "brow_tattoo": return browTattoo ? "你勾了紋眉或修眉，眉形是選出來的，不是天生的" : nil
+        case "nose_surgery": return noseSurgery ? "你勾了鼻子動過，古書講的是天生的樣子" : nil
+        default: return nil
+        }
+    }
 }
 
-/// 跟古書寫的相符、不同、這次沒看。三種要分開數，沒看的不算相符也不算不同（鐵則 7）。
+/// 跟古書寫的相符、不同、剛好在交界上、這次沒看。四種要分開數，在交界上和沒看的不算相符也不算不同（鐵則 7）。
 /// 原始值跟網頁版一樣，標準答案測試要比，不給人看
 enum Status: String, Codable {
     case pass = "成"
     case fail = "不成"
+    case edge = "交界"
     case unjudged = "不判"
 
     var word: String {
         switch self {
         case .pass: return "相符"
         case .fail: return "不同"
+        case .edge: return "在交界上"
         case .unjudged: return "沒看"
         }
     }
-
-    init(_ pass: Bool?) {
-        guard let pass else {
-            self = .unjudged
-            return
-        }
-        self = pass ? .pass : .fail
-    }
 }
 
-/// 三種各有幾項。沒看的單獨數，加起來一定等於總數
+/// 四種各有幾項。在交界上、沒看的單獨數，加起來一定等於總數
 struct Tally: Equatable {
     let same: Int
     let different: Int
+    let onEdge: Int
     let unseen: Int
 
     init(_ statuses: [Status]) {
         same = statuses.filter { $0 == .pass }.count
         different = statuses.filter { $0 == .fail }.count
+        onEdge = statuses.filter { $0 == .edge }.count
         unseen = statuses.filter { $0 == .unjudged }.count
     }
 
-    var total: Int { same + different + unseen }
+    var total: Int { same + different + onEdge + unseen }
 
-    /// 完整一句：三種都寫出來，是 0 也寫
+    /// 完整一句：四種都寫出來，是 0 也寫
     func sentence(_ unit: String) -> String {
-        "\(same) \(unit)跟古書寫的相符・\(different) \(unit)不同・\(unseen) \(unit)沒看"
+        "\(same) \(unit)跟古書寫的相符・\(different) \(unit)不同・\(onEdge) \(unit)在交界上・\(unseen) \(unit)沒看"
     }
 }
 
@@ -68,11 +73,33 @@ struct TestResult {
     let unstable: Bool
 
     static let missing = TestResult(pass: nil, x: nil, t: nil, edge: false, unstable: false)
+
+    var status: Status {
+        guard let pass else { return .unjudged }
+        if edge { return .edge }
+        return pass ? .pass : .fail
+    }
 }
 
 struct ConditionRow {
     let condition: Condition
     let result: TestResult
+    /// 掃描前勾了「動過」，所以這一條沒看
+    var blocked: String?
+
+    var status: Status { result.status }
+
+    /// 這一條的結果，白話
+    var line: String {
+        let plain = condition.plain ?? ""
+        if let blocked { return "\(plain)：這一條沒看，\(blocked)" }
+        switch status {
+        case .pass: return condition.yes ?? ""
+        case .fail: return condition.no ?? ""
+        case .edge: return Judge.edgeLine(plain)
+        case .unjudged: return "\(plain)：這次量不到"
+        }
+    }
 }
 
 struct OfficialResult: Identifiable {
@@ -126,7 +153,8 @@ enum Stats {
         return s[lo] + (s[hi] - s[lo]) * (i - Double(lo))
     }
 
-    /// 每個特徵取所有畫面的中位數；四分位距 ÷ 中位數超過門檻（角度類是超過 3 度）就標不穩。
+    /// 每個特徵取所有畫面的中位數；四分位距太大就標不穩：有尺的跟尺寬比（接近 0 的鼻樑、嘴角才標得到），
+    /// 角度類是超過 3 度，其他跟中位數比。
     /// 一個特徵要在至少一半的畫面上量得到才算數，不然不放進結果（報告會寫沒判）。
     static func summarize(_ frames: [[String: Double]], rules: Rules) -> Measured {
         var out: Measured = [:]
@@ -140,6 +168,8 @@ enum Stats {
             let unstable: Bool
             if FeatureEngine.degreeFeatures.contains(key) {
                 unstable = iqr > 3
+            } else if let scale = rules.features[key]?.scale {
+                unstable = iqr > spread * abs(scale.to - scale.from)
             } else {
                 let base = abs(med) == 0 ? 1e-6 : abs(med)
                 unstable = abs(iqr / base) > spread && abs(med) > 0.02
@@ -171,9 +201,13 @@ struct Judge {
         case ">": pass = x > t
         default: pass = x < t
         }
-        // 剛好落在門檻附近：角度類 ±1 度，其他 ±3%
-        let edge = FeatureEngine.degreeFeatures.contains(feature) ? abs(x - t) <= 1 : abs(x - t) <= abs(t) * 0.03
+        // 交界：離門檻不超過 rules.json 的 edge。落在裡面不算相符，也不算不同
+        let edge = abs(x - t) <= (rules.features[feature]?.edge ?? 0)
         return TestResult(pass: pass, x: x, t: t, edge: edge, unstable: stat.unstable)
+    }
+
+    static func edgeLine(_ plain: String) -> String {
+        "\(plain)：剛好在交界上，換個光線再掃可能會變，不算相符也不算不同"
     }
 
     func officials(_ F: Measured, answers: Answers) -> [OfficialResult] {
@@ -181,29 +215,49 @@ struct Judge {
             if o.conditions.isEmpty {
                 return OfficialResult(official: o, status: .unjudged, why: o.unjudged, rows: [])
             }
-            if o.blockedBy == "brow_tattoo", answers.browTattoo {
+            if let why = answers.blockedWhy(o.blockedBy) {
+                return OfficialResult(official: o, status: .unjudged, why: why, rows: [])
+            }
+            let rows = o.conditions.map { c -> ConditionRow in
+                let blocked = answers.blockedWhy(c.blockedBy)
+                return ConditionRow(condition: c, result: blocked == nil ? test(F, c) : .missing, blocked: blocked)
+            }
+            if let hit = rows.first(where: { $0.blocked != nil }) {
                 return OfficialResult(
                     official: o, status: .unjudged,
-                    why: "你勾了紋眉或修眉，眉形是選出來的，不是天生的", rows: [])
+                    why: "「\(hit.condition.plain ?? "")」這一條沒看：\(hit.blocked ?? "")", rows: rows)
             }
-            if o.blockedBy == "nose_surgery", answers.noseSurgery {
-                return OfficialResult(
-                    official: o, status: .unjudged, why: "你勾了鼻子動過，古書講的是天生的樣子", rows: [])
-            }
-            let rows = o.conditions.map { ConditionRow(condition: $0, result: test(F, $0)) }
             if rows.contains(where: { $0.result.pass == nil }) {
                 return OfficialResult(official: o, status: .unjudged, why: "這次量到的資料不夠", rows: rows)
             }
-            let status: Status = rows.allSatisfy { $0.result.pass == true } ? .pass : .fail
+            // 有一條明確不同就是不同；沒有不同、但有一條在交界上，整官算在交界上
+            let all = rows.map(\.status)
+            let status: Status = all.contains(.fail) ? .fail : all.contains(.edge) ? .edge : .pass
             return OfficialResult(official: o, status: status, why: nil, rows: rows)
         }
     }
 
-    func matchRules(_ F: Measured, hasHair: Bool) -> [Rule] {
+    /// 落在交界的不算對上；三段剛好在交界時，固定放 onEdge 那一條的原文（它兩種都講到）
+    func matchRules(_ F: Measured, hasHair: Bool, answers: Answers) -> [Rule] {
         rules.rules.filter { r in
             if r.needHairline == true, !hasHair { return false }
-            return r.when.conditions.allSatisfy { test(F, $0).pass == true }
+            if answers.blockedWhy(r.blockedBy) != nil { return false }
+            return r.when.conditions.allSatisfy { c in
+                switch test(F, c).status {
+                case .pass: return true
+                case .edge: return r.onEdge == true
+                case .fail, .unjudged: return false
+                }
+            }
         }
+    }
+
+    /// 三段「差不多長」那一條比出來的結果
+    func santing(_ F: Measured) -> TestResult {
+        guard let c = rules.rules.first(where: { $0.id == "santing-equal" })?.when.conditions.first else {
+            return .missing
+        }
+        return test(F, c)
     }
 
     /// 臉形推估。計分是本工具暫定的，古書沒有給數字。少了臉長寬比、額顎比或下顎角就不看。
@@ -258,14 +312,16 @@ struct Judge {
                 PalaceResult(palace: g, status: .unjudged, line: $0, edge: false, unstable: false)
             }
             guard let m = g.measure else { return unjudged(g.why ?? "") }
-            if g.blockedBy == "nose_surgery", answers.noseSurgery {
-                return unjudged("你勾了鼻子動過，古書講的是天生的樣子。")
-            }
-            if g.blockedBy == "brow_tattoo", answers.browTattoo {
-                return unjudged("你勾了紋眉或修眉，眉形是選出來的，不是天生的。")
+            if let why = answers.blockedWhy(g.blockedBy) { return unjudged(why + "。") }
+            let onEdge: (TestResult) -> PalaceResult = {
+                PalaceResult(
+                    palace: g, status: .edge, line: Judge.edgeLine(m.plain ?? "") + "。", edge: true,
+                    unstable: $0.unstable)
             }
             if m.type == "santing" {
                 guard let santingRule else { return unjudged("沒有拉髮際線，量不到臉的上段。") }
+                let st = santing(F)
+                if st.edge { return onEdge(st) }
                 let ok = santingRule.id == "santing-equal"
                 return PalaceResult(
                     palace: g, status: ok ? .pass : .fail, line: (ok ? m.yes : m.no) ?? "", edge: false,
@@ -273,8 +329,9 @@ struct Judge {
             }
             let t = test(F, m)
             guard let pass = t.pass else { return unjudged("這次量到的資料不夠。") }
+            if t.edge { return onEdge(t) }
             return PalaceResult(
-                palace: g, status: pass ? .pass : .fail, line: (pass ? m.yes : m.no) ?? "", edge: t.edge,
+                palace: g, status: t.status, line: (pass ? m.yes : m.no) ?? "", edge: false,
                 unstable: t.unstable)
         }
     }
