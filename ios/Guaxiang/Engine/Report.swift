@@ -52,115 +52,112 @@ struct Report {
         segments != nil && santingRule != nil && Judge(rules: rules).santing(measurement.F).edge
     }
 
-    /// 三停那一段的白話結論
-    var santingHeadline: String? {
-        guard let segments, let santingRule else { return nil }
-        if santingOnEdge {
-            return "臉的三段剛好在「差不多長」和「長短不一樣」的交界上，換個光線再掃可能會變，這次不下結論。"
-        }
-        if santingRule.id == "santing-equal" {
-            return "臉的上、中、下三段差不多長。古書說這樣一生各段比較平穩。"
-        }
-        let sorted = segments.enumerated().sorted { a, b in
-            a.element.v != b.element.v ? a.element.v > b.element.v : a.offset < b.offset
-        }.map(\.element)
-        let longest = sorted[0], shortest = sorted[2]
-        return "臉的三段裡，\(longest.k)（\(longest.part)）最長，\(shortest.k)最短。"
-            + "古書說長的那段人生（\(longest.life)）比較順，短的那段（\(shortest.life)）比較辛苦。"
-    }
-
-    /// 30 張畫面之間差很多的項目名稱
-    var unstableNames: [String] {
-        FeatureEngine.order.compactMap { key in
-            guard measurement.F[key]?.unstable == true, let def = rules.features[key] else { return nil }
-            return def.plainName
-        }
-    }
-
-    func count(_ status: Status) -> Int {
-        officials.filter { $0.status == status }.count
-    }
-
     var officialTally: Tally { Tally(officials.map(\.status)) }
     var palaceTally: Tally { Tally(palaces.map(\.status)) }
 }
 
-/// 「古書怎麼說你」最上面那幾點
-struct SummaryPoint: Identifiable {
-    let title: String
-    let body: String
-    /// 旁邊小圓鈕點開的內容
-    let note: BookNote?
-    var id: String { title + body }
+/// 總覽和首頁那幾列：哪件事、古書說的好處、在哪一區
+struct Highlight: Identifiable {
+    let topic: String
+    let good: String
+    let section: ReportSection
+    var id: String { topic + good }
+}
+
+// MARK: 正面的字：先講好處，再講你的長相
+
+extension PalaceResult {
+    /// 這一件事正面寫的那一句
+    var front: String {
+        guard let say = palace.say else { return line }
+        switch status {
+        case .pass: return say.pass
+        case .fail: return say.fail
+        case .edge: return say.edge
+        case .unjudged: return line
+        }
+    }
+}
+
+extension ConditionRow {
+    /// 這一條正面寫的那一句，只講長相
+    var front: String {
+        switch status {
+        case .pass: return condition.yes ?? ""
+        case .fail: return condition.no ?? ""
+        case .edge: return condition.mid ?? ""
+        case .unjudged: return "\(condition.plain ?? "")：這次沒看"
+        }
+    }
+}
+
+extension SantingSegment {
+    /// 初年、晚年換成白話
+    var lifeWord: String {
+        switch life {
+        case "初年": return "年輕時"
+        case "晚年": return "老年"
+        default: return life
+        }
+    }
 }
 
 extension Report {
-    var summaryPoints: [SummaryPoint] {
-        var points: [SummaryPoint] = []
-        let W = rules.wuxing
-        if let wx = wuxing, let type = W.types[wx.host] {
-            points.append(
-                SummaryPoint(
-                    title: "\(wx.host)形・\(type.plainShape)", body: "古書說\(type.plainLine)", note: wuxingNote))
-        } else {
-            points.append(SummaryPoint(title: "臉形", body: "這次量到的資料不夠，沒看。", note: wuxingNote))
+    /// 看得到的官。耳朵掃不到，不放（QC-0009）
+    var shownOfficials: [OfficialResult] { officials.filter { !$0.official.conditions.isEmpty } }
+
+    /// 十二件事裡看得到、古書有說法的那幾件（QC-0009）
+    var fortunes: [PalaceResult] { palaces.filter { $0.palace.say != nil } }
+
+    /// 十二件事裡掃描看不到的，只放在「這次沒看的」
+    var unseenTopics: [Palace] { palaces.map(\.palace).filter { $0.measure == nil } }
+
+    /// 「眉毛、眼睛」。一官都沒相符就是 nil
+    var goodOfficials: String? {
+        let names = shownOfficials.filter { $0.status == .pass }.map(\.official.plain)
+        return names.isEmpty ? nil : names.joined(separator: "、")
+    }
+
+    /// 最長的那一段。差不多長、在交界上、沒看，都沒有
+    var longestSegment: SantingSegment? {
+        guard let segments, let santingRule, !santingOnEdge, santingRule.id != "santing-equal" else { return nil }
+        return segments.max { $0.v < $1.v }
+    }
+
+    var santingGood: String? {
+        guard segments != nil, let santingRule, !santingOnEdge else { return nil }
+        if santingRule.id == "santing-equal" { return "一生都平穩" }
+        return longestSegment.map { "\($0.lifeWord)最順" }
+    }
+
+    var santingFront: String {
+        guard segments != nil, let santingRule else { return "沒有拉髮際線，三段這次沒看。" }
+        if santingOnEdge { return "你臉的三段，長短介於中間，這次先不說。" }
+        if santingRule.id == "santing-equal" { return "你臉的上、中、下三段差不多長。" }
+        return "你臉的\(longestSegment?.k ?? "")最長。"
+    }
+
+    var shapeName: String { wuxing.map { "\($0.host)形人" } ?? "臉形" }
+
+    /// 臉形的好處；古書沒寫好處的那幾形，寫長相
+    var shapeGood: String {
+        guard let wx = wuxing, let type = rules.wuxing.types[wx.host] else { return "這次沒看" }
+        return type.good ?? type.plainShape
+    }
+
+    /// 對上的好處，一件一列。沒對上的不列，細的在「面相」
+    var highlights: [Highlight] {
+        var out = fortunes.compactMap { x -> Highlight? in
+            guard x.status == .pass, let say = x.palace.say else { return nil }
+            return Highlight(topic: x.palace.topic, good: say.good, section: .palaces)
         }
-
-        let organs = officials.map { (name: $0.official.plain, status: $0.status) }
-        points.append(
-            SummaryPoint(
-                title: "五官", body: officialTally.sentence("項") + "。" + Self.grouped(organs) + W.guan,
-                note: officialsNote))
-
-        points.append(SummaryPoint(title: "臉的三段", body: santingHeadline ?? "這次沒看。", note: santingNote))
-
-        let topics = palaces.map { (name: $0.palace.topic, status: $0.status) }
-        points.append(
-            SummaryPoint(
-                title: "人生十二件事",
-                body: palaceTally.sentence("件") + "。" + Self.grouped(topics, unseen: false) + "沒看的都寫了原因。",
-                note: palacesNote))
-
+        if goodOfficials != nil {
+            out.append(Highlight(topic: "五官", good: rules.wuxing.guanGood, section: .officials))
+        }
+        if let good = santingGood { out.append(Highlight(topic: "三段", good: good, section: .santing)) }
         for r in others {
-            points.append(
-                SummaryPoint(
-                    title: r.headline ?? r.part, body: r.experimental == true ? "實驗項目，只當參考。" : "",
-                    note: note(rule: r)))
+            if let good = r.good { out.append(Highlight(topic: "其他古書說法", good: good, section: .others)) }
         }
-        return points
-    }
-
-    /// 「相符的是鼻子；不同的是眉毛、嘴巴；在交界上的是眼睛；沒看的是耳朵。」四種都沒有就是空字串
-    private static func grouped(_ items: [(name: String, status: Status)], unseen: Bool = true) -> String {
-        var parts: [String] = []
-        for status in [Status.pass, .fail, .edge, .unjudged] {
-            if status == .unjudged, !unseen { continue }
-            let names = items.filter { $0.status == status }.map { $0.name }
-            if !names.isEmpty { parts.append("\(status.word)的是\(names.joined(separator: "、"))") }
-        }
-        return parts.isEmpty ? "" : parts.joined(separator: "；") + "。"
-    }
-
-    /// 臉形是怎麼看出來的（照本工具暫定的計分方式描述）。數字在小圓鈕裡
-    var wuxingWhy: String? {
-        switch wuxing?.host {
-        case "木": return "你的臉長跟臉寬比起來偏長。"
-        case "金": return "你的額頭和下顎差不多寬，下顎偏方。"
-        case "火": return "你的額頭比下顎窄，上窄下寬。"
-        case "水": return "你的臉長跟臉寬比起來偏短，下顎偏圓。"
-        case "土": return "你的臉長跟臉寬比起來偏短，下巴那一段偏長。"
-        default: return nil
-        }
-    }
-
-    var wuxingRelationPlain: String? {
-        guard let wx = wuxing, let guest = wx.guest, let rel = wx.relation else { return nil }
-        switch rel.kind {
-        case "客生主": return "\(guest)生\(wx.host)（五行相生）"
-        case "客剋主": return "\(guest)剋\(wx.host)（五行相剋）"
-        case "主剋客": return "\(wx.host)剋\(guest)（五行相剋）"
-        case "主生客": return "\(wx.host)生\(guest)（五行相生）"
-        default: return nil
-        }
+        return out.filter { !$0.section.locked }
     }
 }

@@ -16,7 +16,7 @@ struct AnnotatedPhoto: View {
         var top: CGFloat
         /// 從螢幕底往上，被視窗蓋住的那一段（含貼著視窗上緣留的一點空）
         var bottom: CGFloat
-        /// 從最上面算起，照片本身至少要鋪到這裡。再往下照片不夠長，就用最後一排的顏色接到底
+        /// 從最上面算起，照片本身至少要鋪到這裡。再往下照片不夠長，就淡成底色
         var cover: CGFloat
     }
 
@@ -81,8 +81,8 @@ struct AnnotatedPhoto: View {
             return photo.marks.hairY == nil ? "你的照片，標出臉的中段、下段的分界" : "你的照片，標出臉的三段分界"
         case .palaces:
             let judged = palaces.filter { $0.status != .unjudged && !MarkLayer.noSpot.contains($0.id) }
-            guard !judged.isEmpty else { return "你的照片，十二件事這次都沒看" }
-            return "你的照片，標出看得到的幾件事：" + judged.map(\.palace.topic).joined(separator: "、")
+            guard !judged.isEmpty else { return "你的照片，運勢這次都沒看" }
+            return "你的照片，標出運勢看的位置：" + judged.map(\.palace.topic).joined(separator: "、")
         }
     }
 
@@ -153,7 +153,8 @@ struct AnnotatedPhoto: View {
     }
 }
 
-/// 照片那一層：裁到 crop 的範圍，左右相反。照片下面不夠的地方，把最後幾排像素往下拉到底，接縫才看不出來
+/// 照片那一層：裁到 crop 的範圍，左右相反。照片下面不夠長的地方淡成底色，
+/// 不拉長像素（QC-0009：拉長的直條紋看起來像壞掉）
 private struct PhotoLayer: View {
     let image: UIImage
     let crop: CGRect
@@ -167,23 +168,16 @@ private struct PhotoLayer: View {
             let frame = CGRect(
                 x: -crop.minX * scale, y: -crop.minY * scale, width: image.size.width * scale,
                 height: image.size.height * scale)
-            let gap = size.height - frame.maxY
-            if gap > 0, let rows = lastRows {
-                // 上下各多畫一段：上面被照片蓋住，下面在畫面外，邊緣變淡也看不到
-                flipped.draw(
-                    Image(uiImage: rows),
-                    in: CGRect(x: frame.minX, y: frame.maxY - gap, width: frame.width, height: gap * 3))
-            }
             flipped.draw(Image(uiImage: image), in: frame)
+            guard frame.maxY < size.height else { return }
+            let fade = CGRect(
+                x: 0, y: frame.maxY - Theme.photoFade, width: size.width, height: Theme.photoFade + Theme.hairline)
+            context.fill(
+                Path(fade),
+                with: .linearGradient(
+                    Gradient(colors: [Theme.canvas.opacity(0), Theme.canvas]),
+                    startPoint: CGPoint(x: 0, y: fade.minY), endPoint: CGPoint(x: 0, y: frame.maxY)))
         }
-    }
-
-    /// 照片最下面幾排
-    private var lastRows: UIImage? {
-        guard let cg = image.cgImage else { return nil }
-        let count = min(4, cg.height)
-        return cg.cropping(to: CGRect(x: 0, y: cg.height - count, width: cg.width, height: count))
-            .map { UIImage(cgImage: $0) }
     }
 }
 

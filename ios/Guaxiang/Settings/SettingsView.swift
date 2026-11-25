@@ -18,6 +18,8 @@ extension VeggieConfig {
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    /// 報告視窗裡的那一頁：沒有「完成」，也不能關掉整個視窗
+    var embedded = false
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system.rawValue
     @AppStorage(VeggieHaptics.storageKey) private var haptics = true
     @State private var confirmErase = false
@@ -134,7 +136,9 @@ struct SettingsView: View {
             .onAppear { filled = Storage.shared.load(Profile.self, from: .profile)?.filledCount ?? 0 }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.fontWeight(.semibold) }
+                if !embedded {
+                    ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.fontWeight(.semibold) }
+                }
             }
             .onChange(of: appearance) { _, value in (Appearance(rawValue: value) ?? .system).apply() }
             // 清除問兩次，兩次的按鈕字不同（準則 3-3、5-26）。購買紀錄不動
@@ -147,7 +151,7 @@ struct SettingsView: View {
             .alert("清掉就救不回來", isPresented: $confirmEraseAgain) {
                 Button("永久刪除", role: .destructive) {
                     model.eraseAll()
-                    dismiss()
+                    if !embedded { dismiss() }
                 }
                 Button("先不用", role: .cancel) {}
             } message: {

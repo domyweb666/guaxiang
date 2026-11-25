@@ -68,6 +68,8 @@ struct Condition: Decodable {
     let plain: String?
     let yes: String?
     let no: String?
+    /// 剛好在交界上時，正面寫的白話
+    let mid: String?
     let type: String?
     /// 不畫刻度尺：原文沒有寫這個樣子，畫了會像古書說的
     let noRuler: Bool?
@@ -112,6 +114,9 @@ struct Rule: Decodable, Identifiable {
     /// 這一條用到的古書叫法
     let terms: String
     let headline: String?
+    /// 對上時的好處和你的長相，白話
+    let good: String?
+    let goodLine: String?
     let note: String?
 }
 
@@ -147,6 +152,8 @@ struct Wuxing: Decodable {
     let keRulePlain: [String: String]
     let notFaultPlain: String
     let guan: String
+    /// 一官長成古書寫的樣子，好處是什麼
+    let guanGood: String
     let guanTerms: String
 }
 
@@ -155,6 +162,8 @@ struct WuxingType: Decodable {
     let yuanwen: String
     let plainShape: String
     let plainLine: String
+    /// 古書說這一形的好處。有的形古書沒寫好處
+    let good: String?
 }
 
 struct CannotSee: Decodable {
@@ -183,12 +192,22 @@ struct Palace: Decodable, Identifiable {
     let note: String?
     let noQuoteWhy: String?
     let source: String?
+    /// 報告正面寫的話。沒有的就不放進「運勢」
+    let say: PalaceSay?
 
     private enum CodingKeys: String, CodingKey {
         case id, topic, name, modern, whereTerm, terms, yuanwen, baihua, measure, blockedBy, notMeasured, why, note
-        case noQuoteWhy, source
+        case noQuoteWhy, source, say
         case place = "where"
     }
+}
+
+/// 一件事在報告正面的話：對上時的好處，和四種結果各一句
+struct PalaceSay: Decodable {
+    let good: String
+    let pass: String
+    let fail: String
+    let edge: String
 }
 
 struct Liunian: Decodable {

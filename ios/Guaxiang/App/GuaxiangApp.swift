@@ -135,12 +135,21 @@ final class AppModel: ObservableObject {
 
     func eraseAll() {
         storage.eraseAll()
-        report = nil
         saved = nil
         photo = nil
         capture = nil
         isSample = false
+        guard path.contains(.report) else {
+            report = nil
+            path = []
+            return
+        }
+        // 報告裡的設定頁也會清：先離開報告，那一頁滑出去的時候不能突然變空的
         path = []
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            if self?.path.isEmpty == true { self?.report = nil }
+        }
     }
 }
 
@@ -174,7 +183,6 @@ struct RootView: View {
 /// 主畫面。沒掃過：示意圖＋三個承諾＋「開始掃描」。掃過：上一次報告的摘要放最上面（HANDOFF 4-5）
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showSettings = false
     @State private var showAsk = false
 
@@ -229,10 +237,10 @@ struct HomeView: View {
         Card {
             VStack(spacing: Theme.group) {
                 FaceSketch().frame(maxWidth: Theme.sketchWidth)
-                if let rules = model.rules, let rule = rules.rules.first(where: { $0.id == "santing-equal" }) {
-                    PlainLine(subject: "臉的三段", note: { BookNote.rule(rule, rules: rules, report: nil) }) {
+                if let rule = model.rules?.rules.first(where: { $0.id == "santing-equal" }) {
+                    HStack(spacing: Theme.item) {
                         Text(rule.baihua).fixedSize(horizontal: false, vertical: true)
-                        Note("報告裡看到這顆小圓鈕，點了就是古書原文和怎麼估的。")
+                        InfoButton(subject: "臉的三段") { BookNote.rule(rule) }
                     }
                 }
             }
@@ -246,7 +254,7 @@ struct HomeView: View {
         Card {
             promise("lock", "照片不離開你的手機", divider: false)
             promise("book.closed", "每一句都附古書出處")
-            promise("minus.circle", "量不到的地方，直接告訴你")
+            promise("minus.circle", "看不到的地方，直接告訴你")
         }
     }
 
@@ -264,41 +272,20 @@ struct HomeView: View {
     }
 
     private func savedCard(_ r: Report) -> some View {
-        // 字再大，三格並排就放不下「三段差不多長」
-        let stats =
-            typeSize >= .xxLarge
-            ? AnyLayout(VStackLayout(spacing: Theme.item))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: Theme.item))
-        return Button { model.openSaved() } label: {
+        Button { model.openSaved() } label: {
             VStack(alignment: .leading, spacing: Theme.cardPad) {
                 HStack(alignment: .firstTextBaseline) {
                     Note(r.measurement.when.formatted(date: .long, time: .omitted) + "掃的")
                     Spacer()
                     Text("看報告 ›").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
                 }
-                HStack(spacing: Theme.cardPad) {
-                    Text(r.wuxing?.host ?? "？")
-                        .font(Theme.mark)
-                        .foregroundStyle(Theme.accent)
-                        .frame(width: Theme.markSize, height: Theme.markSize)
-                        .background(Theme.accentSoft)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.innerRadius, style: .continuous))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: Theme.tight) {
-                        Text(shapeTitle(r)).font(.title3.weight(.semibold)).multilineTextAlignment(.leading)
-                        if r.wuxing != nil {
-                            Text("臉形推估").font(.subheadline).foregroundStyle(Theme.secondary)
-                        }
+                ShapeHead(report: r)
+                ForEach(r.highlights.prefix(3)) { h in
+                    VStack(alignment: .leading, spacing: Theme.tight / 2) {
+                        Text(h.topic).font(.footnote).foregroundStyle(Theme.secondary)
+                        Text(h.good).font(.body.weight(.semibold)).multilineTextAlignment(.leading)
                     }
                 }
-                stats {
-                    stat(
-                        "五官", VerdictShort.lead(r.officialTally, "項"), VerdictShort.rest(r.officialTally, "項"))
-                    stat("三段", r.santingShort, [r.santingLife])
-                    stat(
-                        "十二件事", VerdictShort.lead(r.palaceTally, "件"), VerdictShort.rest(r.palaceTally, "件"))
-                }
-                .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(Color.primary)
             .padding(Theme.cardPad)
@@ -308,31 +295,6 @@ struct HomeView: View {
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         }
         .buttonStyle(PressStyle())
-    }
-
-    private func shapeTitle(_ r: Report) -> String {
-        guard let wx = r.wuxing, let type = r.rules.wuxing.types[wx.host] else { return "臉形這次沒看" }
-        return "\(wx.host)形・\(type.plainShape)"
-    }
-
-    /// sub 有幾段就用「・」接成一行，放不下就在「・」後面斷
-    private func stat(_ title: String, _ value: String, _ sub: [String]) -> some View {
-        VStack(alignment: .leading, spacing: Theme.tight / 2) {
-            Text(title).font(.caption).foregroundStyle(Theme.secondary)
-            Text(value).font(.subheadline.weight(.semibold))
-                .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.leading)
-            ViewThatFits(in: .horizontal) {
-                Text(sub.joined(separator: "・")).lineLimit(1)
-                Text(sub.joined(separator: "・\n")).fixedSize(horizontal: false, vertical: true)
-            }
-            .font(.caption)
-            .foregroundStyle(Theme.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, Theme.group)
-        .padding(.vertical, Theme.item)
-        .background(Theme.canvas)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.fieldRadius, style: .continuous))
     }
 
     private var askRow: some View {

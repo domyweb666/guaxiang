@@ -250,7 +250,6 @@ final class EngineUnitTests: XCTestCase {
         XCTAssertNotNil(nose.rows[1].blocked)
         XCTAssertEqual(report.palaces.first { $0.id == "ming" }?.status, .unjudged)
         XCTAssertEqual(report.palaces.first { $0.id == "caibo" }?.status, .pass)
-        XCTAssertTrue(report.note(condition: nose.rows[1].condition, of: nose).estimates.allSatisfy(\.warnings.isEmpty))
     }
 
     /// 鼻子動過，「鼻子明顯比顴骨高」那一條也不能出現

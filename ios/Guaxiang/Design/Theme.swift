@@ -116,8 +116,12 @@ enum Theme {
     static let windowTapWidth: CGFloat = 120
     /// 找不到導覽列時，橫條加標題列當作這麼高
     static let windowStrip: CGFloat = 64
-    /// 照片本身至少要鋪到視窗上緣以下這麼多，圓角兩旁才是真的照片。再往下照片不夠長就用最後一排顏色接到螢幕底
+    /// 照片本身至少要鋪到視窗上緣以下這麼多，圓角兩旁才是真的照片。再往下淡成底色
     static let windowOverlap: CGFloat = 64
+    /// 照片下緣淡成底色的那一段有多高
+    static let photoFade: CGFloat = 64
+    /// 「面相」那一頁，區塊開頭離視窗頂這麼近就算捲到那一區
+    static let faceSwitch: CGFloat = 140
     /// 照片最上面那層淡底，返回鈕和狀態列才看得清楚
     static let scrimOpacity: Double = 0.6
 

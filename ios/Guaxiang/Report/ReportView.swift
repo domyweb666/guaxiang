@@ -1,19 +1,21 @@
 import SwiftUI
 
-/// 報告的每一區。五官、三段、十二件事在視窗的切換列上，其他從總覽往右推入
+/// 報告的每一區。運勢、五官、三段在「面相」那一頁，其他從總覽往右推入
 enum ReportSection: String, Hashable, CaseIterable {
-    case wuxing, officials, santing, palaces, others, cannotSee, diagram, numbers
+    case wuxing, officials, santing, palaces, others, cannotSee, diagram
+
+    /// 「面相」那一頁由上到下
+    static let onFacePage: [ReportSection] = [.palaces, .officials, .santing]
 
     var title: String {
         switch self {
         case .wuxing: return "臉形"
         case .officials: return "五官"
         case .santing: return "三段"
-        case .palaces: return "十二件事"
+        case .palaces: return "運勢"
         case .others: return "其他古書說法"
         case .cannotSee: return "這次沒看的"
         case .diagram: return "標註圖"
-        case .numbers: return "數字明細"
         }
     }
 
@@ -26,36 +28,26 @@ enum ReportSection: String, Hashable, CaseIterable {
     }
 
     var locked: Bool { !isFree && !Paywall.canSeeFullReport }
-}
 
-extension Report {
-    /// 三段的短說法，給總覽和首頁那一格
-    var santingShort: String {
-        guard let segments, let santingRule else { return "沒看" }
-        if santingOnEdge { return "在交界上" }
-        if santingRule.id == "santing-equal" { return "三段差不多長" }
-        let longest = segments.max { $0.v < $1.v }
-        return "\(longest?.k ?? "")最長"
-    }
-
-    var santingLife: String {
-        guard let segments, let santingRule else { return "沒拉髮際線" }
-        if santingOnEdge { return "這次不下結論" }
-        if santingRule.id == "santing-equal" { return "古書說各段平穩" }
-        return "管" + (segments.max { $0.v < $1.v }?.life ?? "")
-    }
-
-    var measuredCount: Int {
-        FeatureEngine.order.filter { measurement.F[$0] != nil }.count
+    /// 照片上要亮哪一區。鎖住的區不亮
+    var mode: AnnotatedPhoto.Mode {
+        guard !locked else { return .overview }
+        switch self {
+        case .officials: return .officials
+        case .santing: return .santing
+        case .palaces: return .palaces
+        default: return .overview
+        }
     }
 }
 
 /// 報告：上半部照片滿版、不捲動，下半部是一直在的懸浮視窗（QC-0006 第 3 筆，多米 2026-11-24 選 A）。
-/// 設定、匯出、清除都在設定頁，不放這裡（準則 3-3、3-4）
 struct ReportView: View {
     @EnvironmentObject private var model: AppModel
     let report: Report
     @State private var tab = ReportTab.overview
+    /// 「面相」那一頁捲到哪一區
+    @State private var section = ReportSection.palaces
     @State private var detent = Theme.windowHalf
     /// 這一頁在不在畫面上（推入完成到開始返回之間）
     @State private var pageOn = false
@@ -95,7 +87,7 @@ struct ReportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $windowUp, onDismiss: reopen) {
-            ReportWindow(report: report, tab: $tab, detent: $detent, pushed: $pushed)
+            ReportWindow(report: report, tab: $tab, section: $section, detent: $detent, pushed: $pushed)
                 .presentationDetents([Theme.windowHalf, .large], selection: $detent)
                 .presentationBackgroundInteraction(.enabled(upThrough: Theme.windowHalf))
                 // 捲內容就是捲內容，要拉高拉低拖上面的橫條和標題列
@@ -123,7 +115,9 @@ struct ReportView: View {
             }
             .modifier(Clear(stage: stage))
         } else if let photo = model.photo {
-            AnnotatedPhoto(photo: photo, mode: tab.mode, palaces: report.palaces, fill: stage.fill)
+            AnnotatedPhoto(
+                photo: photo, mode: tab == .face ? section.mode : .overview, palaces: report.fortunes, fill: stage.fill
+            )
                 .overlay(alignment: .top) {
                     LinearGradient(
                         colors: [Theme.canvas.opacity(Theme.scrimOpacity), Theme.canvas.opacity(0)], startPoint: .top,
@@ -164,25 +158,6 @@ struct ReportView: View {
                 size: CGSize(width: size.width, height: max(1, full)), top: top, bottom: full - windowTop + Theme.group,
                 cover: windowTop + Theme.windowOverlap)
         }
-    }
-}
-
-/// 一排會自動換行的小膠囊
-struct FlowChips: View {
-    let items: [String]
-
-    var body: some View {
-        FlowLayout(spacing: Theme.item) {
-            ForEach(items, id: \.self) { item in
-                Text(item)
-                    .font(.footnote)
-                    .padding(.horizontal, Theme.item)
-                    .padding(.vertical, Theme.tight)
-                    .background(Theme.fill)
-                    .clipShape(Capsule())
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

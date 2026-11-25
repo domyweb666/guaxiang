@@ -31,23 +31,6 @@ struct VerdictDot: View {
     }
 }
 
-/// 條件列前面的標記：圓點加字
-struct VerdictMark: View {
-    let status: Status
-
-    var body: some View {
-        HStack(spacing: Theme.tight) {
-            VerdictDot(status: status)
-            Text(status.word)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.secondary)
-        }
-        .fixedSize()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(status.word)
-    }
-}
-
 /// 卡片右上角的標籤
 struct VerdictTag: View {
     let status: Status
@@ -55,7 +38,7 @@ struct VerdictTag: View {
     var body: some View {
         HStack(spacing: Theme.tight) {
             VerdictDot(status: status)
-            Text(status.word)
+            Text(status.tagWord)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(status == .unjudged ? Theme.secondary : Color.primary)
         }
@@ -65,27 +48,7 @@ struct VerdictTag: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.tagRadius, style: .continuous))
         .fixedSize()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(status.word)
-    }
-}
-
-/// 摘要：四種各幾項
-struct VerdictSummary: View {
-    let tally: Tally
-    /// 項、件
-    let unit: String
-
-    var body: some View {
-        Text(tally.sentence(unit))
-            .font(.headline)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-/// 頁首那兩句：尺怎麼看、分界是誰定的
-struct RulerGuide: View {
-    var body: some View {
-        Note("紅色那一段是古書寫的樣子，圓點是你的位置。圓點落在分界線旁邊那一小段淡色裡，就是在交界上，不算相符也不算不同。古書沒有給數字，分界、交界的寬度和尺的兩端都是本工具暫定的。")
+        .accessibilityLabel(status.tagWord)
     }
 }
 
@@ -106,15 +69,14 @@ struct RulerView: View {
         .padding(.top, Theme.tight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("刻度尺，從\(ruler.left)到\(ruler.right)")
-        .accessibilityValue(
-            spoken)
+        .accessibilityValue(spoken)
     }
 
     private var spoken: String {
         switch status {
         case .pass: return "你的位置在古書寫的那一段裡面，相符"
         case .fail: return "你的位置在古書寫的那一段外面，不同"
-        case .edge: return "你的位置剛好在交界上，不算相符也不算不同"
+        case .edge: return "你的位置介於中間"
         case .unjudged: return "這次沒看"
         }
     }
@@ -167,16 +129,7 @@ struct RulerView: View {
     }
 }
 
-/// 總覽和首頁的小格子放不下整句，拆成大字一行、小字兩段
-enum VerdictShort {
-    static func lead(_ tally: Tally, _ unit: String) -> String {
-        "\(tally.same) \(unit)相符"
-    }
-
-    static func rest(_ tally: Tally, _ unit: String) -> [String] {
-        // 格子小，在交界上是 0 就不放；完整一句一定四種都寫
-        ["\(tally.different) \(unit)不同"]
-            + (tally.onEdge > 0 ? ["\(tally.onEdge) \(unit)在交界上"] : [])
-            + ["\(tally.unseen) \(unit)沒看"]
-    }
+/// 標籤上的字：「在交界上」寫成白話
+extension Status {
+    var tagWord: String { self == .edge ? "介於中間" : word }
 }

@@ -28,6 +28,21 @@
                     }
                 }
 
+                if let saved = model.saved {
+                    SectionTitle("量測數字（校準用）")
+                    Card {
+                        CardBlock(divider: false) {
+                            ForEach(FeatureEngine.order, id: \.self) { key in
+                                if let stat = saved.measurement.F[key] {
+                                    Note(
+                                        "\(saved.rules.features[key]?.plainName ?? key)  " + String(format: "%.4f", stat.v)
+                                            + (stat.unstable ? "  不穩" : ""))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 SectionTitle("連電腦的 Claude CLI")
                 bridgeCard
 

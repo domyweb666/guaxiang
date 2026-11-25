@@ -73,7 +73,7 @@ struct PaywallView: View {
 
     /// 付錢前先看樣子：十二件事「錢財」那張卡，內容是規則庫的真條文，標明是範例
     @ViewBuilder private var sample: some View {
-        if let rules = model.rules, let g = rules.palaces.first(where: { $0.id == "caibo" }), let baihua = g.baihua {
+        if let rules = model.rules, let g = rules.palaces.first(where: { $0.id == "caibo" }) {
             Note("付錢前先看樣子（範例）").padding(.top, Theme.section - Theme.group).padding(.horizontal, Theme.tight)
             Card {
                 CardBlock(divider: false) {
@@ -81,17 +81,14 @@ struct PaywallView: View {
                         Text(g.topic).font(.headline)
                         Spacer()
                         InfoButton(subject: g.topic) {
-                            BookNote.palace(g, rules: rules, report: nil, result: nil)
+                            BookNote.palace(g)
                         }
                     }
-                    if let m = g.measure,
-                        let ruler = Ruler(m, measured: Sample.measurement(rulesVersion: rules.version).F, rules: rules)
-                    {
-                        Text(m.yes ?? "").fixedSize(horizontal: false, vertical: true)
-                        RulerView(ruler: ruler, status: .pass)
+                    if let say = g.say {
+                        Text(say.good).font(.title3.weight(.bold)).foregroundStyle(Theme.accent)
+                        Text(say.pass).fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("古書說：" + baihua).fixedSize(horizontal: false, vertical: true)
-                    Note("範例只看了鼻樑直不直。圓點的位置是假的。")
+                    
                 }
             }
         }

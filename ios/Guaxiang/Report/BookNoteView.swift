@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 白話旁邊的小圓鈕。點了從下方彈出原文和估算方式
+/// 標題旁邊的小圓鈕。點了從下方彈出古書原文
 struct InfoButton: View {
     /// 這顆在講哪一項，旁白會唸
     let subject: String
@@ -21,9 +21,10 @@ struct InfoButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressStyle())
-        // 圖示對齊卡片的右邊，觸控範圍往外多一點
-        .padding(.trailing, -Theme.group)
-        .accessibilityLabel("看原文和估算方式")
+        // 緊跟在標題後面，觸控範圍往外多一點，不把那一列撐高
+        .padding(.horizontal, -Theme.item)
+        .padding(.vertical, -Theme.group)
+        .accessibilityLabel("看古書原文")
         .accessibilityValue(subject)
         .sheet(isPresented: $open) {
             if let content = note() { BookNoteSheet(note: content) }
@@ -31,21 +32,7 @@ struct InfoButton: View {
     }
 }
 
-/// 一段白話，右邊一顆小圓鈕
-struct PlainLine<Content: View>: View {
-    let subject: String
-    let note: () -> BookNote?
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        HStack(alignment: .center, spacing: Theme.item) {
-            VStack(alignment: .leading, spacing: Theme.tight) { content }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            InfoButton(subject: subject, note: note)
-        }
-    }
-}
-
+/// 古書原文、白話、出處，其他都不放
 struct BookNoteSheet: View {
     @Environment(\.dismiss) private var dismiss
     let note: BookNote
@@ -54,14 +41,6 @@ struct BookNoteSheet: View {
         NavigationStack {
             Page {
                 book
-                if !note.estimates.isEmpty || !note.remarks.isEmpty {
-                    SectionTitle("怎麼估的")
-                    estimates
-                }
-                if !note.cannot.isEmpty {
-                    SectionTitle("還有什麼量不到")
-                    cannot
-                }
             }
             .navigationTitle(note.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -75,71 +54,23 @@ struct BookNoteSheet: View {
         .presentationBackground(Theme.canvas)
     }
 
-    // MARK: 古書
-
     @ViewBuilder private var book: some View {
-        SectionTitle("古書原文")
+        // 沒有逐字原文的不能叫原文
+        SectionTitle(note.quotes.isEmpty ? "古書怎麼說" : "古書原文")
         Card {
             ForEach(Array(note.quotes.enumerated()), id: \.offset) { i, quote in
                 CardBlock(divider: i > 0) {
                     paragraph(quote.text, font: Theme.quote)
-                    labeled("白話", quote.plain)
+                    paragraph(quote.plain, font: .body)
                 }
             }
-            if note.noQuote != nil || note.plain != nil {
-                CardBlock(divider: !note.quotes.isEmpty) {
-                    if let why = note.noQuote { Note(why) }
-                    if let plain = note.plain { paragraph(plain, font: .body) }
-                }
+            if let plain = note.plain {
+                CardBlock(divider: !note.quotes.isEmpty) { paragraph(plain, font: .body) }
             }
-            if note.source != nil || note.literature != nil || !note.terms.isEmpty {
-                CardBlock { facts }
+            if let source = note.source {
+                CardBlock { Note(source) }
             }
         }
-    }
-
-    @ViewBuilder private var facts: some View {
-        if let source = note.source { labeled("出處", source) }
-        if !note.terms.isEmpty { labeled("古書的叫法", note.terms.joined(separator: "\n")) }
-        if let literature = note.literature { labeled("有幾本書這樣說", literature) }
-    }
-
-    // MARK: 怎麼估的
-
-    private var estimates: some View {
-        Card {
-            ForEach(Array(note.estimates.enumerated()), id: \.offset) { i, e in
-                CardBlock(divider: i > 0) {
-                    paragraph(e.name, font: .subheadline.weight(.semibold))
-                    paragraph(e.method, font: .subheadline)
-                    ForEach(e.numbers, id: \.self) { Note($0) }
-                    ForEach(e.warnings, id: \.self) { Note($0, warn: true) }
-                }
-            }
-            if !note.remarks.isEmpty {
-                CardBlock(divider: !note.estimates.isEmpty) {
-                    ForEach(note.remarks, id: \.self) { paragraph($0, font: .subheadline) }
-                }
-            }
-        }
-    }
-
-    // MARK: 量不到的
-
-    private var cannot: some View {
-        Card {
-            CardBlock(divider: false) {
-                ForEach(note.cannot, id: \.self) { paragraph($0, font: .subheadline) }
-            }
-        }
-    }
-
-    private func labeled(_ label: String, _ text: String) -> some View {
-        VStack(alignment: .leading, spacing: Theme.tight / 2) {
-            Note(label)
-            paragraph(text, font: .subheadline)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     private func paragraph(_ text: String, font: Font) -> some View {
