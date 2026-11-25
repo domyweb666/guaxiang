@@ -17,6 +17,7 @@ struct ReportSectionView: View {
 /// 判讀結果的樣子只呼叫 VerdictView.swift，這裡不畫
 struct ReportSectionContent: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var typeSize
     let section: ReportSection
     let report: Report
 
@@ -285,9 +286,11 @@ struct ReportSectionContent: View {
                 HStack(spacing: Theme.item) {
                     Text(g.topic).font(.title3.weight(.semibold))
                     Spacer()
-                    if ruler == nil { VerdictTag(status: x.status) }
+                    if ruler == nil, !typeSize.isAccessibilitySize { VerdictTag(status: x.status) }
                     InfoButton(subject: g.topic) { report.note(palace: x) }
                 }
+                // 字很大時標籤換到下一行，不跟標題搶寬度
+                if ruler == nil, typeSize.isAccessibilitySize { VerdictTag(status: x.status) }
                 Note("看臉上的" + g.place)
                 Text(x.line).fixedSize(horizontal: false, vertical: true)
                 if let ruler { RulerView(ruler: ruler, status: x.status) }

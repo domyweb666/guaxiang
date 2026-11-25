@@ -124,6 +124,18 @@ struct RulerView: View {
             .frame(height: Theme.rulerDot)
     }
 
+    /// 圓點。在交界上的改空心，裡面看得到分界線和淡色那一段
+    @ViewBuilder private var marker: some View {
+        if status == .edge {
+            Circle().strokeBorder(Theme.accent, lineWidth: Theme.rulerRing)
+        } else {
+            Circle()
+                .fill(Theme.accent)
+                .padding(Theme.rulerRing)
+                .background(Circle().fill(Theme.card))
+        }
+    }
+
     /// 圓點的中心能走的範圍兩邊各縮半顆。分界線跟圓點用同一個換算，圓點在哪一邊不會看錯
     private func bar(width: CGFloat) -> some View {
         let half = Theme.rulerDot / 2
@@ -147,10 +159,7 @@ struct RulerView: View {
                 .fill(Theme.accent)
                 .frame(width: Theme.markWidth, height: Theme.rulerTick)
                 .offset(x: edge - Theme.markWidth / 2)
-            Circle()
-                .fill(Theme.accent)
-                .padding(Theme.rulerRing)
-                .background(Circle().fill(Theme.card))
+            marker
                 .frame(width: Theme.rulerDot, height: Theme.rulerDot)
                 .offset(x: dot - half)
         }
