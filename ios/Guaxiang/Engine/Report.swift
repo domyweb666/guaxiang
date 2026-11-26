@@ -25,6 +25,12 @@ struct Report {
     let segments: [SantingSegment]?
     let santingRule: Rule?
     let others: [Rule]
+    /// 三段剛好在「差不多長」和「長短不一樣」的交界上
+    let santingOnEdge: Bool
+    /// 十二件事裡看得到、古書有說法的那幾件（QC-0009）
+    let fortunes: [PalaceResult]
+    /// 總覽和首頁那幾列。這三個建報告時算一次就好，畫面切分頁、按分段鈕都會讀
+    private(set) var highlights: [Highlight] = []
 
     init(measurement m: Measurement, rules: Rules) {
         let judge = Judge(rules: rules)
@@ -45,11 +51,9 @@ struct Report {
         } else {
             segments = nil
         }
-    }
-
-    /// 三段剛好在「差不多長」和「長短不一樣」的交界上
-    var santingOnEdge: Bool {
-        segments != nil && santingRule != nil && Judge(rules: rules).santing(measurement.F).edge
+        santingOnEdge = segments != nil && santingRule != nil && judge.santing(m.F).edge
+        fortunes = palaces.filter { $0.palace.say != nil }
+        highlights = makeHighlights()
     }
 
     var officialTally: Tally { Tally(officials.map(\.status)) }
@@ -106,9 +110,6 @@ extension Report {
     /// 看得到的官。耳朵掃不到，不放（QC-0009）
     var shownOfficials: [OfficialResult] { officials.filter { !$0.official.conditions.isEmpty } }
 
-    /// 十二件事裡看得到、古書有說法的那幾件（QC-0009）
-    var fortunes: [PalaceResult] { palaces.filter { $0.palace.say != nil } }
-
     /// 十二件事裡掃描看不到的，只放在「這次沒看的」
     var unseenTopics: [Palace] { palaces.map(\.palace).filter { $0.measure == nil } }
 
@@ -146,7 +147,7 @@ extension Report {
     }
 
     /// 對上的好處，一件一列。沒對上的不列，細的在「面相」
-    var highlights: [Highlight] {
+    private func makeHighlights() -> [Highlight] {
         var out = fortunes.compactMap { x -> Highlight? in
             guard x.status == .pass, let say = x.palace.say else { return nil }
             return Highlight(topic: x.palace.topic, good: say.good, section: .palaces)

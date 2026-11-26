@@ -111,7 +111,21 @@ extension Storage {
         excludeFromBackup(.photoMarks)
     }
 
+    /// 照片的 JPEG 編碼和寫檔排在這條線上，一次一件
+    private static let photoQueue = DispatchQueue(label: "org.domyweb.guaxiang.photo", qos: .userInitiated)
+
+    /// 按「看報告」時用：全尺寸 JPEG 編碼和加密寫檔要幾十毫秒，丟到背景，畫面先換頁
+    func savePhotoLater(_ photo: FacePhoto) {
+        Self.photoQueue.async { self.savePhoto(photo) }
+    }
+
+    /// 背景還在存的照片先等它存完。清除、讀取之前叫，免得清完又被寫回來
+    func finishPhotoWrites() {
+        Self.photoQueue.sync {}
+    }
+
     func loadPhoto(when: Date) -> FacePhoto? {
+        finishPhotoWrites()
         guard let marks = load(PhotoMarks.self, from: .photoMarks), marks.when == when, let data = data(.photo),
             let image = UIImage(data: data)
         else { return nil }

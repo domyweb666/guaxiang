@@ -65,6 +65,7 @@ final class Storage {
 
     /// 「清除所有資料」：報告、照片、簡介、問答紀錄、同意紀錄、開發用的金鑰和電腦連線，全部刪掉
     func eraseAll() {
+        finishPhotoWrites()
         File.allCases.forEach(remove)
         UserDefaults.standard.removeObject(forKey: Keys.aiConsent)
         UserDefaults.standard.removeObject(forKey: Keys.questionsAsked)

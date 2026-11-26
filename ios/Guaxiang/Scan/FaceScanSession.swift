@@ -81,6 +81,8 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         }
         let config = ARFaceTrackingConfiguration()
         config.maximumNumberOfTrackedFaces = ARFaceTrackingConfiguration.supportedNumberOfTrackedFaces
+        // 亮度自己從網格頂點取，用不到 ARKit 的光線估計
+        config.isLightEstimationEnabled = false
         view.automaticallyUpdatesLighting = false
         view.session.delegate = self
         view.session.delegateQueue = queue
@@ -287,9 +289,7 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         } else {
             DispatchQueue.main.async {
                 self.count = n
-                self.isGood = true
-                self.hint = "很好，保持不動"
-                self.debugLine = debug
+                self.show(good: true, hint: "很好，保持不動", debug: debug)
             }
         }
     }
@@ -317,18 +317,21 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
 
     private func publish(_ verdict: ScanGate.Verdict, debug: String) {
         DispatchQueue.main.async {
-            self.debugLine = debug
             switch verdict {
-            case .hint(let text):
-                self.isGood = false
-                self.hint = text
-            case .skip:
-                self.isGood = false
-            case .ok:
-                self.isGood = true
-                self.hint = "很好，保持不動"
+            case .hint(let text): self.show(good: false, hint: text, debug: debug)
+            case .skip: self.show(good: false, hint: nil, debug: debug)
+            case .ok: self.show(good: true, hint: "很好，保持不動", debug: debug)
             }
         }
+    }
+
+    /// 值有變才指定：@Published 指定同一個值也會叫畫面重算，掃描時每秒十幾次
+    private func show(good: Bool, hint: String?, debug: String) {
+        if isGood != good { isGood = good }
+        if let hint, self.hint != hint { self.hint = hint }
+        #if DEVTOOLS
+            if debugLine != debug { debugLine = debug }
+        #endif
     }
 
     private func makeImage(_ buffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> UIImage? {

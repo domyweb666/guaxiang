@@ -180,10 +180,13 @@ struct ParsedAnswer: Equatable {
 
 /// 檢查 AI 的回答：把［E3］換成可以點的標籤，引用了不存在的編號就拿掉並記下來。照網頁版 answerHTML()
 enum Citations {
+    /// 編一次就好，不要每則回答、每次重畫都重編
+    private static let regex = try? NSRegularExpression(pattern: "［(E\\d+)］|\\[(E\\d+)\\]")
+
     static func parse(_ answer: String, validIDs: Set<String>) -> ParsedAnswer {
         let source = answer.replacingOccurrences(of: "**", with: "") as NSString
         var out = ParsedAnswer()
-        guard let regex = try? NSRegularExpression(pattern: "［(E\\d+)］|\\[(E\\d+)\\]") else {
+        guard let regex else {
             out.pieces = [.text(source as String)]
             return out
         }

@@ -46,14 +46,25 @@ struct PlaneMapper {
         self.face = Array(face.prefix(n))
     }
 
+    /// 最近的幾個頂點，近的在前。掃一遍只留最近的幾個，不把 1220 個全排序；
+    /// 距離一樣時先來的排前面，跟穩定排序挑出來的一模一樣
+    func nearest(_ q: UV, count: Int = 12) -> [Int] {
+        var top: [(index: Int, d: Double)] = []
+        top.reserveCapacity(count + 1)
+        for i in pixels.indices {
+            let d = (pixels[i].x - q.x) * (pixels[i].x - q.x) + (pixels[i].y - q.y) * (pixels[i].y - q.y)
+            if top.count == count, d >= top[count - 1].d { continue }
+            var j = top.count
+            while j > 0, top[j - 1].d > d { j -= 1 }
+            top.insert((index: i, d: d), at: j)
+            if top.count > count { top.removeLast() }
+        }
+        return top.map(\.index)
+    }
+
     func map(_ q: UV) -> Pt? {
         guard pixels.count >= 3 else { return nil }
-        // 最近的 12 個頂點
-        let nearest = pixels.indices
-            .map { (index: $0, d: (pixels[$0].x - q.x) * (pixels[$0].x - q.x) + (pixels[$0].y - q.y) * (pixels[$0].y - q.y)) }
-            .sorted { $0.d < $1.d }
-            .prefix(12)
-            .map(\.index)
+        let nearest = self.nearest(q)
         let i0 = nearest[0]
         let p0 = pixels[i0]
         // 另外兩個點挑跟第一個點圍出最大三角形的，避免三點幾乎一直線

@@ -122,7 +122,12 @@ final class AppModel: ObservableObject {
     func show(_ measurement: Measurement, photo newPhoto: FacePhoto?) {
         guard let rules else { return }
         storage.save(measurement, to: .measurement)
-        if let newPhoto { storage.savePhoto(newPhoto) } else { storage.removePhoto() }
+        if let newPhoto {
+            storage.savePhotoLater(newPhoto)
+        } else {
+            storage.finishPhotoWrites()
+            storage.removePhoto()
+        }
         photo = newPhoto
         storage.remove(.chat)
         let r = Report(measurement: measurement, rules: rules)

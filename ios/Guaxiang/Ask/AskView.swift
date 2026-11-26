@@ -23,6 +23,8 @@ struct AskView: View {
     /// 鍵盤出來之前是不是在看最新的一則
     @State private var pinned = true
     @FocusState private var typing: Bool
+    /// 開通了沒。要讀鑰匙圈，打開這一頁時讀一次，不要每次重畫都讀
+    @State private var ready = true
 
     private enum Pending {
         case ask(String)
@@ -170,7 +172,7 @@ struct AskView: View {
                     .foregroundStyle(Theme.secondary)
             }
             .multilineTextAlignment(.center)
-            if !AskClient.isReady { notReady }
+            if !ready { notReady }
             suggestions(4)
         }
         .padding(.vertical, Theme.group)
@@ -190,128 +192,33 @@ struct AskView: View {
     private func suggestions(_ count: Int) -> some View {
         VStack(alignment: .leading, spacing: Theme.item) {
             ForEach(AskSuggestions.list(report: report, profile: profile).prefix(count), id: \.self) { text in
-                Button {
-                    submit(text)
-                } label: {
-                    Text(text)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.primary)
-                        .multilineTextAlignment(.leading)
-                        .padding(.horizontal, Theme.cardPad)
-                        .frame(minHeight: Theme.touch)
-                        .background(Theme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
-                        .contentShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
-                }
-                .buttonStyle(PressStyle())
-                .disabled(chat.busy)
+                SuggestionButton(text: text, disabled: chat.busy) { submit(text) }
             }
         }
     }
 
+    /// 每一則抽成自己的畫面、內容沒變就不重算：拖視窗、鍵盤升降、打字時，舊的回答不再重新解析
     private func row(_ entry: ChatEntry) -> some View {
-        VStack(alignment: .leading, spacing: Theme.group) {
-            HStack(spacing: 0) {
-                Spacer(minLength: Theme.bubbleInset)
-                Text(entry.q)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Theme.cardPad)
-                    .padding(.vertical, Theme.rowPadV)
-                    .background(Theme.accentSoft)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
-                    .contentShape(
-                        .contextMenuPreview, RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous)
-                    )
-                    .contextMenu { copyButton(entry.q) }
-                    .accessibilityLabel("你問：\(entry.q)")
-            }
-            if let reply = entry.reply {
-                answer(entry, reply)
-            } else if let error = entry.error {
-                failed(entry, error)
-            } else {
-                Flipping()
-            }
-        }
-    }
-
-    private func answer(_ entry: ChatEntry, _ reply: AskReply) -> some View {
-        let ids = Set(entry.pack.map(\.id))
         let last = entry.id == chat.entries.last?.id
-        return VStack(alignment: .leading, spacing: Theme.group) {
-            Text(attributed(AskReply.collapsed(reply.pieces(validIDs: ids))))
-                .lineSpacing(Theme.tight)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contextMenu { copyButton(reply.plainText(validIDs: ids)) }
-                .environment(
-                    \.openURL,
-                    OpenURLAction { url in
-                        if let found = entry.pack.first(where: { $0.id == url.lastPathComponent }) {
-                            typing = false
-                            sheet = .evidence(found)
-                        }
-                        return .handled
-                    })
-            if needsBirthday(entry, reply) {
-                Button("去填生日") {
-                    typing = false
-                    sheet = .profile
-                }
-                .buttonStyle(.ghost)
-                Note("流年要知道幾歲才對得上。生日只留在手機，傳出去的只有年紀。")
-            }
-            if reply.kind == .offtopic, last { suggestions(3) }
-        }
-    }
-
-    /// 問到今年怎樣，又沒填生日
-    private func needsBirthday(_ entry: ChatEntry, _ reply: AskReply) -> Bool {
-        guard reply.kind == .answer || reply.kind == .nodata else { return false }
-        return profile.currentAge() == nil && LiunianQuestion.matches(entry.q)
-    }
-
-    private func failed(_ entry: ChatEntry, _ error: String) -> some View {
-        VStack(alignment: .leading, spacing: Theme.tight) {
-            Note(error, warn: true)
-            Button {
-                retry(entry.id)
-            } label: {
-                Label("重試", systemImage: "arrow.clockwise")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(chat.busy ? Theme.secondary : Theme.accent)
-                    .frame(minHeight: Theme.touch)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressStyle())
-            .disabled(chat.busy)
-        }
-    }
-
-    private func copyButton(_ text: String) -> some View {
-        Button {
-            UIPasteboard.general.string = text
-        } label: {
-            Label("複製", systemImage: "doc.on.doc")
-        }
-    }
-
-    private func attributed(_ pieces: [AnswerPiece]) -> AttributedString {
-        var out = AttributedString()
-        for piece in pieces {
-            switch piece {
-            case .text(let text):
-                out += AttributedString(text)
-            case .cite(let id):
-                // 不斷行空格和字元連接符（U+2060），標籤不會被拆成兩行
-                var tag = AttributedString("\u{00A0}依\u{2060}據\u{00A0}\(id.dropFirst())\u{00A0}")
-                tag.link = URL(string: "guaxiang-cite:///\(id)")
-                tag.foregroundColor = Theme.accent
-                tag.font = .caption
-                out += tag
-            }
-        }
-        return out
+        let extra = last && entry.kind == .offtopic
+            ? Array(AskSuggestions.list(report: report, profile: profile).prefix(3)) : []
+        return ChatRow(
+            entry: entry,
+            busy: chat.busy,
+            hasAge: profile.currentAge() != nil,
+            extra: extra,
+            showEvidence: { found in
+                typing = false
+                sheet = .evidence(found)
+            },
+            fillBirthday: {
+                typing = false
+                sheet = .profile
+            },
+            retry: { retry(entry.id) },
+            ask: { submit($0) }
+        )
+        .equatable()
     }
 
     // MARK: 輸入列
@@ -401,6 +308,7 @@ struct AskView: View {
 
     private func reloadProfile() {
         profile = Storage.shared.load(Profile.self, from: .profile) ?? Profile()
+        ready = AskClient.isReady
     }
 }
 
@@ -416,6 +324,153 @@ enum AskSheet: Identifiable {
         case .evidence(let e): return "evidence-" + e.id
         case .profile: return "profile"
         }
+    }
+}
+
+/// 一則問答。只比資料不比閉包：資料沒變，SwiftUI 就跳過這一則的 body
+private struct ChatRow: View, Equatable {
+    let entry: ChatEntry
+    let busy: Bool
+    let hasAge: Bool
+    /// 跑題時最後一則下面放的建議問題
+    let extra: [String]
+    let showEvidence: (Evidence) -> Void
+    let fillBirthday: () -> Void
+    let retry: () -> Void
+    let ask: (String) -> Void
+
+    static func == (a: ChatRow, b: ChatRow) -> Bool {
+        a.entry == b.entry && a.busy == b.busy && a.hasAge == b.hasAge && a.extra == b.extra
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.group) {
+            HStack(spacing: 0) {
+                Spacer(minLength: Theme.bubbleInset)
+                Text(entry.q)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.cardPad)
+                    .padding(.vertical, Theme.rowPadV)
+                    .background(Theme.accentSoft)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+                    .contentShape(
+                        .contextMenuPreview, RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous)
+                    )
+                    .contextMenu { Self.copyButton(entry.q) }
+                    .accessibilityLabel("你問：\(entry.q)")
+            }
+            if let reply = entry.reply {
+                answer(reply)
+            } else if let error = entry.error {
+                failed(error)
+            } else {
+                Flipping()
+            }
+        }
+    }
+
+    private func answer(_ reply: AskReply) -> some View {
+        let ids = Set(entry.pack.map(\.id))
+        let pieces = reply.pieces(validIDs: ids)
+        let plain = pieces.reduce(into: "") { out, piece in
+            if case .text(let text) = piece { out += text }
+        }
+        return VStack(alignment: .leading, spacing: Theme.group) {
+            Text(Self.attributed(AskReply.collapsed(pieces)))
+                .lineSpacing(Theme.tight)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contextMenu { Self.copyButton(plain) }
+                .environment(
+                    \.openURL,
+                    OpenURLAction { url in
+                        if let found = entry.pack.first(where: { $0.id == url.lastPathComponent }) {
+                            showEvidence(found)
+                        }
+                        return .handled
+                    })
+            if needsBirthday(reply) {
+                Button("去填生日", action: fillBirthday).buttonStyle(.ghost)
+                Note("流年要知道幾歲才對得上。生日只留在手機，傳出去的只有年紀。")
+            }
+            if !extra.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.item) {
+                    ForEach(extra, id: \.self) { text in
+                        SuggestionButton(text: text, disabled: busy) { ask(text) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 問到今年怎樣，又沒填生日
+    private func needsBirthday(_ reply: AskReply) -> Bool {
+        guard reply.kind == .answer || reply.kind == .nodata else { return false }
+        return !hasAge && LiunianQuestion.matches(entry.q)
+    }
+
+    private func failed(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.tight) {
+            Note(error, warn: true)
+            Button(action: retry) {
+                Label("重試", systemImage: "arrow.clockwise")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(busy ? Theme.secondary : Theme.accent)
+                    .frame(minHeight: Theme.touch)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .disabled(busy)
+        }
+    }
+
+    static func copyButton(_ text: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+        } label: {
+            Label("複製", systemImage: "doc.on.doc")
+        }
+    }
+
+    static func attributed(_ pieces: [AnswerPiece]) -> AttributedString {
+        var out = AttributedString()
+        for piece in pieces {
+            switch piece {
+            case .text(let text):
+                out += AttributedString(text)
+            case .cite(let id):
+                // 不斷行空格和字元連接符（U+2060），標籤不會被拆成兩行
+                var tag = AttributedString("\u{00A0}依\u{2060}據\u{00A0}\(id.dropFirst())\u{00A0}")
+                tag.link = URL(string: "guaxiang-cite:///\(id)")
+                tag.foregroundColor = Theme.accent
+                tag.font = .caption
+                out += tag
+            }
+        }
+        return out
+    }
+}
+
+/// 建議問題的一顆鈕：開場和跑題時共用
+private struct SuggestionButton: View {
+    let text: String
+    let disabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(Color.primary)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, Theme.cardPad)
+                .frame(minHeight: Theme.touch)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: Theme.bubbleRadius, style: .continuous))
+        }
+        .buttonStyle(PressStyle())
+        .disabled(disabled)
     }
 }
 

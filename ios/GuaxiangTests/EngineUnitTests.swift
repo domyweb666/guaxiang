@@ -127,6 +127,25 @@ final class EngineUnitTests: XCTestCase {
         XCTAssertNil(PlaneMapper(pixels: [], face: []).map(UV(x: 0, y: 0)))
     }
 
+    /// 只留最近 12 個的挑法，要跟整份穩定排序挑出來的一模一樣，距離一樣的也要同順序
+    func testPlaneMapperNearestMatchesFullSort() {
+        // 格點：很多點跟查詢點距離剛好一樣
+        var pixels: [UV] = []
+        for i in 0..<35 {
+            for j in 0..<35 { pixels.append(UV(x: Double(i) / 34, y: Double(j) / 34)) }
+        }
+        let mapper = PlaneMapper(pixels: pixels, face: pixels.map { Pt(x: $0.x, y: $0.y, z: 0) })
+        for q in [UV(x: 0.5, y: 0.5), UV(x: 0, y: 0), UV(x: 0.37, y: 0.81), UV(x: 2, y: -1)] {
+            let reference = pixels.indices
+                .map { (index: $0, d: (pixels[$0].x - q.x) * (pixels[$0].x - q.x) + (pixels[$0].y - q.y) * (pixels[$0].y - q.y)) }
+                .enumerated()
+                .sorted { $0.element.d != $1.element.d ? $0.element.d < $1.element.d : $0.offset < $1.offset }
+                .prefix(12)
+                .map(\.element.index)
+            XCTAssertEqual(mapper.nearest(q), Array(reference), "\(q)")
+        }
+    }
+
     // MARK: 輪廓認點
 
     func testBrowHeadAndTail() {

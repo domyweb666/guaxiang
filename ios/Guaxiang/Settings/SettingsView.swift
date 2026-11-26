@@ -43,7 +43,7 @@ struct SettingsView: View {
                 PageTitle(title: "設定", pushed: true)
                 group("關於你") {
                     NavigationLink {
-                        ProfileView()
+                        Deferred { ProfileView() }
                     } label: {
                         VeggieRow(
                             icon: "person", title: "簡介", value: filled == 0 ? "還沒填" : "填了 \(filled) 項", accessory: .push)
@@ -119,7 +119,7 @@ struct SettingsView: View {
                 #if DEVTOOLS
                     group("開發工具（上架前會拿掉）") {
                         NavigationLink {
-                            DevToolsView()
+                            Deferred { DevToolsView() }
                         } label: {
                             VeggieRow(icon: "wrench.and.screwdriver", title: "範例報告、連電腦、金鑰", accessory: .push)
                         }
@@ -223,4 +223,11 @@ struct PrivacyNoteView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// NavigationLink 的目的頁在設定頁每次重畫時就會建一次；這兩頁一建就讀檔、讀鑰匙圈，包起來等真的推進去才建
+private struct Deferred<Content: View>: View {
+    let make: () -> Content
+
+    var body: some View { make() }
 }
