@@ -188,6 +188,7 @@ struct RootView: View {
 /// 主畫面。沒掃過：示意圖＋三個承諾＋「開始掃描」。掃過：上一次報告的摘要放最上面（HANDOFF 4-5）
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showSettings = false
     @State private var showAsk = false
 
@@ -203,6 +204,8 @@ struct HomeView: View {
                         PageTitle(title: "瓜相", lead: "掃一次臉，看古書怎麼說你。", pushed: true)
                         hero
                         promises
+                        // 輔助字級時按鈕區太高，把卡片擠到剩一小截：這句改放進捲動區（模擬器 2026-11-26 最大字級）
+                        if typeSize.isAccessibilitySize { disclaimer }
                     }
                 }
                 .padding(.horizontal, Theme.screenMargin)
@@ -215,8 +218,7 @@ struct HomeView: View {
                 } else {
                     Button("開始掃描") { model.startOver() }.buttonStyle(.primary)
                     Button("先看一份範例報告") { model.openSample() }.buttonStyle(.textOnly)
-                    Note("這是傳統文化解讀，不是科學測量，也不能替你做任何重大決定。")
-                        .multilineTextAlignment(.center)
+                    if !typeSize.isAccessibilitySize { disclaimer.multilineTextAlignment(.center) }
                 }
             }
         }
@@ -235,6 +237,10 @@ struct HomeView: View {
         .sheet(isPresented: $showAsk) {
             if let saved = model.saved { AskView(report: saved) }
         }
+    }
+
+    private var disclaimer: some View {
+        Note("這是傳統文化解讀，不是科學測量，也不能替你做任何重大決定。")
     }
 
     /// 示意圖和一句古書的白話（rules.json 三段那一條），原文在旁邊的小圓鈕裡

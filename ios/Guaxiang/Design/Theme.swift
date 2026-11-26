@@ -368,10 +368,20 @@ struct ReportRow: View {
     let title: String
     var value: String?
     var locked = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: Theme.group) {
-            Text(title).font(.body).foregroundStyle(Color.primary)
+            // 輔助字級時名稱和狀態左右擺會各擠成兩行，改成上下排（模擬器 2026-11-26 最大字級）
+            if typeSize.isAccessibilitySize, let value {
+                VStack(alignment: .leading, spacing: Theme.tight / 2) {
+                    Text(title).font(.body).foregroundStyle(Color.primary)
+                    Text(value).font(.subheadline).foregroundStyle(Theme.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(title).font(.body).foregroundStyle(Color.primary)
+            }
             if locked {
                 Text("完整版")
                     .font(.caption.weight(.semibold))
@@ -382,7 +392,7 @@ struct ReportRow: View {
                     .clipShape(Capsule())
             }
             Spacer(minLength: Theme.item)
-            if let value {
+            if let value, !typeSize.isAccessibilitySize {
                 Text(value).font(.subheadline).foregroundStyle(Theme.secondary).multilineTextAlignment(.trailing)
             }
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.tertiary)
