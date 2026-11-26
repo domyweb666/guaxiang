@@ -184,7 +184,7 @@ final class AskTests: XCTestCase {
         let p = try JSONDecoder().decode(Profile.self, from: Data(old.utf8))
         XCTAssertEqual(p, Profile(age: 34, gender: "男", relation: "其他", work: "上班族", intro: "想換工作"))
         XCTAssertEqual(p.currentAge(), 34)
-        XCTAssertEqual(p.filledCount, 5)
+        XCTAssertEqual(p.filledCount, 4) // intro 那一欄拿掉了，不算
         let again = try JSONDecoder().decode(Profile.self, from: JSONEncoder().encode(p))
         XCTAssertEqual(again, p)
         XCTAssertTrue(try JSONDecoder().decode(Profile.self, from: Data("{}".utf8)).isEmpty)
