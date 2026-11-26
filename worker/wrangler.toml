@@ -9,3 +9,21 @@ ALLOW_LOCALHOST = "1"
 # 讓 iOS app 也能問（app 不帶 origin，改認 x-guaxiang-client 標頭）
 ALLOW_APP = "1"
 # 金鑰不要寫在這裡。用：npx wrangler secret put ANTHROPIC_API_KEY
+
+# 次數限制第一層：同一個 IP 每分鐘最多問幾題。namespace_id 是自己取的數字，不用先到後台建
+[[ratelimits]]
+name = "ASK_BURST"
+namespace_id = "1801"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+# 次數限制第二層：每天幾題。要先建一個 KV 再把下面兩段的井號拿掉：
+#   npx wrangler kv namespace create ASK_KV
+# 把它印出來的 id 貼到 id = 那裡。DAILY_LIMIT 是每個 IP 每天的題數，數字還沒定
+# [[kv_namespaces]]
+# binding = "ASK_KV"
+# id = "貼上 id"
+#
+# 再到上面 [vars] 加一行：DAILY_LIMIT = "20"

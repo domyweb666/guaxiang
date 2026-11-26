@@ -29,6 +29,17 @@
 每問一題大約幾千個 token。實際價格看 Anthropic 官網。
 想省錢可以把 `wrangler.toml` 的 `MODEL` 改成 `claude-haiku-5-5`。
 
+## 次數限制
+
+同一個網路位址（IP）算一個人，不收裝置編號。兩層：
+
+1. **每分鐘**：`wrangler.toml` 的 `[[ratelimits]]`，現在是每分鐘 5 題。部署就生效，不用先建東西
+2. **每天**：要先建一個 KV，步驟寫在 `wrangler.toml` 最下面。題數 `DAILY_LIMIT` 還沒定，沒設就不限
+
+被擋時回 429，app 直接顯示「問得太快了」或「今天已經問了 N 題」。格式錯的請求不扣次數。
+
+本機測試：`node worker/worker.test.mjs`（不連網、不呼叫 AI）
+
 ## 還沒做的
 
-- 每人每天的提問次數限制（上架前要加，可以用 Cloudflare 的 Rate Limiting）
+- App Attest：確認請求真的來自瓜相 app，不是有人照著標頭假造。IP 限制擋得住一般濫用，擋不住換 IP 的人
