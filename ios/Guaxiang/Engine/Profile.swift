@@ -69,8 +69,8 @@ struct Profile: Codable, Equatable {
 
     /// 填了幾欄，給設定頁那一列看
     var filledCount: Int {
-        let texts = [gender, relation, work, intro, name, kids, siblings, field, answerLength]
-        let lists = [topics, events, faceChanges]
+        let texts = [gender, relation, work, name, kids, siblings, field, answerLength]
+        let lists = [faceChanges]
         let hasAge = birthday != nil || age != nil
         return texts.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count + lists.filter { !$0.isEmpty }.count + (hasAge ? 1 : 0)
     }
@@ -85,6 +85,10 @@ struct Profile: Codable, Equatable {
     func forAsk(on now: Date = Date()) -> Profile {
         var out = self
         out.age = currentAge(on: now)
+        // 「想問的事」那一區拿掉了（多米 11/26）。舊版填過的看不到也改不了，不再送出去
+        out.topics = []
+        out.events = []
+        out.intro = ""
         out.birthday = nil
         return out
     }

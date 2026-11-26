@@ -136,6 +136,25 @@ final class AskTests: XCTestCase {
         XCTAssertFalse(Prompt.profileText(p.forAsk(on: now)).contains("1990"))
     }
 
+    /// 「想問的事」拿掉了：舊版填過的不再送出去，也不算在填了幾欄
+    func testRemovedQuestionsSectionNotSent() {
+        var p = Profile()
+        p.topics = ["錢財"]
+        p.events = ["換工作"]
+        p.intro = "最近很煩"
+        p.work = "上班族"
+        let asked = p.forAsk()
+        XCTAssertTrue(asked.topics.isEmpty)
+        XCTAssertTrue(asked.events.isEmpty)
+        XCTAssertEqual(asked.intro, "")
+        let text = Prompt.profileText(asked)
+        XCTAssertFalse(text.contains("錢財"))
+        XCTAssertFalse(text.contains("換工作"))
+        XCTAssertFalse(text.contains("最近很煩"))
+        XCTAssertTrue(text.contains("上班族"))
+        XCTAssertEqual(p.filledCount, 1)
+    }
+
     func testHistorySkipsFailedAndOfftopic() {
         let entries = [
             ChatEntry(q: "一", a: "答［E1］", pack: [], t: Date(), kind: .answer),

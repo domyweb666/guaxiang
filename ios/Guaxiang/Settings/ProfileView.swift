@@ -54,25 +54,6 @@ struct ProfileView: View {
                 }
             }
 
-            SectionTitle("想問的事")
-            Card {
-                CardBlock(divider: false) {
-                    multiple(
-                        "最想問哪方面", ["錢財", "工作", "感情", "家人", "朋友", "搬家出國", "整體"], $profile.topics,
-                        "為什麼問：問古書的建議問題，會先放這幾項。")
-                }
-                CardBlock {
-                    multiple(
-                        "最近正在面對的事", ["換工作", "創業", "考試", "結婚", "搬家", "沒有特別的"], $profile.events,
-                        "為什麼問：挑條文的時候，先看跟這件事有關的。決定還是要你自己做。")
-                }
-                CardBlock {
-                    Text("想多說一點").font(.headline)
-                    field("最近在煩惱什麼", $profile.intro, limit: Prompt.Limits.intro, lines: 3...8)
-                    Note("為什麼問：你說得越清楚，越挑得到相關的條文。最多 400 字。")
-                }
-            }
-
             SectionTitle("臉和回答")
             Card {
                 CardBlock(divider: false) {

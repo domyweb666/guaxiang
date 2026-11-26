@@ -9,7 +9,8 @@ struct ScanView: View {
     @State private var showTip = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var progress: Double { Double(session.count) / Double(ScanGate.needFrames) }
+    private var progress: Double { min(1, Double(session.count) / Double(ScanGate.needFrames)) }
+    private var percent: Int { Int((progress * 100).rounded(.down)) }
 
     var body: some View {
         Group {
@@ -62,9 +63,9 @@ struct ScanView: View {
             .aspectRatio(3.0 / 4.0, contentMode: .fit)
             .padding(.horizontal, Theme.section)
             .overlay(alignment: .bottom) {
-                Text("\(session.count) / \(ScanGate.needFrames)")
+                Text("\(percent)%")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
-                    .contentTransition(.numericText(value: Double(session.count)))
+                    .contentTransition(.numericText(value: Double(percent)))
                     .foregroundStyle(ScanColor.text)
                     .padding(.horizontal, Theme.cardPad)
                     .padding(.vertical, Theme.tight)
@@ -72,7 +73,7 @@ struct ScanView: View {
                     .clipShape(Capsule())
             }
             .accessibilityElement()
-            .accessibilityLabel("已收 \(session.count) 張，共要 \(ScanGate.needFrames) 張")
+            .accessibilityLabel("掃描百分之 \(percent)")
 
             Text(session.failure ?? session.hint)
                 .font(.title2.bold())
@@ -98,7 +99,7 @@ struct ScanView: View {
             #if DEVTOOLS
                 Text(session.debugLine).font(.caption2).foregroundStyle(ScanColor.secondary)
             #endif
-            Text("收滿 \(ScanGate.needFrames) 張清楚的畫面就好。中途離開 app，回來從頭收。")
+            Text("掃到 100% 就好。中途離開 app，回來從頭掃。")
                 .font(.footnote)
                 .foregroundStyle(ScanColor.secondary)
                 .multilineTextAlignment(.center)
