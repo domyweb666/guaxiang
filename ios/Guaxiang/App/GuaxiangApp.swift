@@ -35,6 +35,8 @@ final class AppModel: ObservableObject {
     @Published var photo: FacePhoto?
     /// 這次掃描收到的東西。只留在記憶體裡，關掉 app 就沒了
     @Published var capture: ScanCapture?
+    /// 從首頁「今日一句」點進報告：打開後跳到「面相」的這一區，用完就清掉
+    var openAt: ReportSection?
 
     let rules: Rules?
     let storage: Storage
@@ -65,8 +67,9 @@ final class AppModel: ObservableObject {
         if path.last == .scan { path.removeLast() }
     }
 
-    func openSaved() {
+    func openSaved(at section: ReportSection? = nil) {
         guard let saved else { return }
+        openAt = section
         report = saved
         isSample = false
         path = [.report]
@@ -74,6 +77,7 @@ final class AppModel: ObservableObject {
 
     func openSample() {
         guard let rules else { return }
+        openAt = nil
         report = Report(measurement: Sample.measurement(rulesVersion: rules.version), rules: rules)
         isSample = true
         path = [.report]
@@ -178,7 +182,7 @@ struct RootView: View {
                 case .scan: ScanView()
                 case .hairline: HairlineView()
                 case .report:
-                    if let report = model.report { ReportView(report: report) }
+                    if let report = model.report { ReportView(report: report, openAt: model.openAt) }
                 }
             }
         }
@@ -189,8 +193,10 @@ struct RootView: View {
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
     @State private var showAsk = false
+    @State private var daily: DailyLine?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -198,6 +204,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: Theme.group) {
                     if let saved = model.saved {
                         PageTitle(title: "瓜相", lead: "你的報告在這裡，隨時可以再看。", pushed: true)
+                        if let daily { dailyCard(daily) }
                         savedCard(saved)
                         askRow
                     } else {
@@ -233,6 +240,11 @@ struct HomeView: View {
                 .accessibilityLabel("設定")
             }
         }
+        .onAppear(perform: refreshDaily)
+        // 過了半夜回到 app、改了生日（從設定回來）、再掃一次，都重挑
+        .onChange(of: scenePhase) { _, phase in if phase == .active { refreshDaily() } }
+        .onChange(of: showSettings) { _, open in if !open { refreshDaily() } }
+        .onChange(of: model.saved?.measurement.when) { _, _ in refreshDaily() }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showAsk) {
             if let saved = model.saved { AskView(report: saved) }
@@ -280,6 +292,56 @@ struct HomeView: View {
             .padding(.horizontal, Theme.cardPad)
             .frame(minHeight: Theme.rowHeight)
         }
+    }
+
+    private func refreshDaily() {
+        guard let saved = model.saved else {
+            daily = nil
+            return
+        }
+        let age = model.storage.load(Profile.self, from: .profile)?.currentAge()
+        daily = Daily.today(saved, age: age)
+    }
+
+    /// 今日一句（多米 11/27 選 A：首頁最上面一張卡）。點了跳到報告那一區；流年沒有對應的區，打開問古書
+    private func dailyCard(_ d: DailyLine) -> some View {
+        Button {
+            if let section = d.section {
+                model.openSaved(at: section)
+            } else {
+                showAsk = true
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: Theme.item) {
+                Text("今日一句・\(d.topic)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                Text(d.good)
+                    .font(Theme.quoteLarge) // 宋體沒有粗體，加 weight 會退回別的字
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(d.line)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let quote = d.quote, !quote.isEmpty {
+                    Text("「\(quote)」")
+                        .font(Theme.quote)
+                        .foregroundStyle(Theme.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .foregroundStyle(Color.primary)
+            .padding(Theme.cardPad)
+            .padding(.vertical, Theme.tight)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityHint(d.section == nil ? "打開問古書" : "打開報告的\(d.section!.title)")
     }
 
     private func savedCard(_ r: Report) -> some View {

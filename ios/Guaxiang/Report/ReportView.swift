@@ -55,6 +55,15 @@ struct ReportView: View {
     /// 視窗裡有推入的頁
     @State private var pushed = false
 
+    init(report: Report, openAt: ReportSection? = nil) {
+        self.report = report
+        // 從首頁「今日一句」點進來：直接停在「面相」的那一區。其他區（臉形、其他說法）停在總覽
+        if let openAt, ReportSection.onFacePage.contains(openAt) {
+            _tab = State(initialValue: .face)
+            _section = State(initialValue: openAt)
+        }
+    }
+
     var body: some View {
         GeometryReader { geo in
             let stage = Stage(size: geo.size, top: geo.safeAreaInsets.top, bottom: geo.safeAreaInsets.bottom)
