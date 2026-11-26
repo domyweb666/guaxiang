@@ -136,7 +136,15 @@ enum Theme {
     /// 古書原文用宋體，跟著系統字級縮放
     static let quote = Font.custom("Songti TC", size: 17, relativeTo: .body)
     static let quoteLarge = Font.custom("Songti TC", size: 20, relativeTo: .title3)
-    static let mark = Font.custom("Songti TC", size: 36, relativeTo: .largeTitle).weight(.bold)
+    /// 宋體粗體。系統有 STSongti-TC-Bold 就直接指名用它；沒有就用一般宋體，
+    /// 不再加 .weight(.bold)，那樣家族裡找不到粗體時系統會退回別的字（模擬器 2026-11-26）
+    static let mark: Font = {
+        let bold = "STSongti-TC-Bold"
+        if UIFont(name: bold, size: 36) != nil {
+            return Font.custom(bold, size: 36, relativeTo: .largeTitle)
+        }
+        return Font.custom("Songti TC", size: 36, relativeTo: .largeTitle)
+    }()
 
     private static func fixed(_ hex: UInt32) -> Color {
         Color(uiColor: rgb(hex))
