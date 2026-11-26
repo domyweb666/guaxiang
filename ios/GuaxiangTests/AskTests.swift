@@ -171,6 +171,14 @@ final class AskTests: XCTestCase {
         XCTAssertTrue(try JSONDecoder().decode(Profile.self, from: Data("{}".utf8)).isEmpty)
     }
 
+    /// 稱呼欄只按了換行，不算填了一項
+    func testBlankFieldNotCounted() {
+        var p = Profile()
+        p.name = "\n"
+        p.work = "  "
+        XCTAssertEqual(p.filledCount, 0)
+    }
+
     func testAgeFromBirthday() throws {
         let b = Birthday(year: 1990, month: 11, day: 24)
         XCTAssertEqual(b.age(on: try day(2026, 11, 23)), 35)

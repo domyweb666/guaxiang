@@ -72,7 +72,7 @@ struct Profile: Codable, Equatable {
         let texts = [gender, relation, work, intro, name, kids, siblings, field, answerLength]
         let lists = [topics, events, faceChanges]
         let hasAge = birthday != nil || age != nil
-        return texts.filter { !$0.isEmpty }.count + lists.filter { !$0.isEmpty }.count + (hasAge ? 1 : 0)
+        return texts.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count + lists.filter { !$0.isEmpty }.count + (hasAge ? 1 : 0)
     }
 
     /// 現在幾歲。有生日照生日算，沒有就用舊版手填的；不在 18–120 歲就當沒填

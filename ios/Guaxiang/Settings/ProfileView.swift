@@ -195,6 +195,11 @@ struct ProfileView: View {
             .background(Theme.fill)
             .clipShape(RoundedRectangle(cornerRadius: Theme.fieldRadius, style: .continuous))
             .onChange(of: text.wrappedValue) { _, value in
+                // 只按了換行或空白：當成沒填，提示字才會回來
+                if !value.isEmpty, value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    text.wrappedValue = ""
+                    return
+                }
                 let clipped = Prompt.clip(value, limit)
                 if clipped != value { text.wrappedValue = clipped }
             }

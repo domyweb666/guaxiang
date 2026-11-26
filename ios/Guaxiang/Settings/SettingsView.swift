@@ -143,7 +143,9 @@ struct SettingsView: View {
             .onChange(of: appearance) { _, value in (Appearance(rawValue: value) ?? .system).apply() }
             // 清除問兩次，兩次的按鈕字不同（準則 3-3、5-26）。購買紀錄不動
             .confirmationDialog(
-                "要清除報告、照片、簡介和問答紀錄嗎？想留數字的話，先用上面的「匯出資料」。",
+                model.saved == nil
+                    ? "要清除報告、照片、簡介和問答紀錄嗎？"
+                    : "要清除報告、照片、簡介和問答紀錄嗎？想留數字的話，先用上面的「匯出資料」。",
                 isPresented: $confirmErase, titleVisibility: .visible
             ) {
                 Button("繼續清除", role: .destructive) { confirmEraseAgain = true }
