@@ -94,7 +94,7 @@ struct ReportView: View {
                 .presentationContentInteraction(.scrolls)
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(Theme.windowRadius)
-                .presentationBackground(Theme.canvas)
+                .presentationBackground { WindowBackground() }
                 .interactiveDismissDisabled()
         }
     }
@@ -194,5 +194,21 @@ struct FlowLayout: Layout {
             x += s.width + spacing
             rowHeight = max(rowHeight, s.height)
         }
+    }
+}
+
+/// 視窗底色。深色時視窗和後面都是黑的，沿著視窗邊描一圈淡線，才看得出視窗在哪（模擬器 2026-11-26）
+private struct WindowBackground: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Theme.canvas
+            .overlay {
+                if scheme == .dark {
+                    RoundedRectangle(cornerRadius: Theme.windowRadius, style: .continuous)
+                        .strokeBorder(Theme.separator, lineWidth: Theme.hairline)
+                        .ignoresSafeArea()
+                }
+            }
     }
 }
