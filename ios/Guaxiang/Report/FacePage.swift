@@ -1,69 +1,41 @@
 import SwiftUI
 
-/// 「面相」：運勢、五官、三段在同一頁往下捲（QC-0009）。
+/// 「面相」：標題下一排分段鈕，運勢、五官、三段一次看一區，點了照片跟著亮那一區
+/// （QC-0009；多米 2026-11-26 選設計 A，參考他截圖的「腿｜推｜拉」）。
 /// 先講好處，再講你的長相；怎麼看的、怎麼算的不寫。原文在標題旁的小圓鈕，一張卡只有一顆。
 struct FacePage: View {
     @EnvironmentObject private var model: AppModel
     let report: Report
-    /// 現在捲到哪一區，照片跟著亮
+    /// 現在看哪一區，照片跟著亮
     @Binding var section: ReportSection
-    /// 總覽點過來要捲到哪一區，捲完清掉
-    @Binding var jump: ReportSection?
-    @State private var reached: Set<ReportSection> = []
-
-    private static let space = "face.scroll"
 
     var body: some View {
-        ScrollViewReader { proxy in
+        VStack(spacing: 0) {
+            Picker("面相分區", selection: $section) {
+                ForEach(ReportSection.onFacePage, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, Theme.screenMargin)
+            .padding(.vertical, Theme.item)
             Page {
                 if model.isSample {
                     Note("範例報告：數字是假的，不是你的臉。", warn: true)
                         .padding(.horizontal, Theme.tight)
-                        .padding(.top, Theme.item)
                 }
-                block(.palaces) { fortunes }
-                block(.officials) { officials }
-                block(.santing) { santing }
+                if section.locked {
+                    LockedSection(section: section)
+                } else {
+                    switch section {
+                    case .officials: officials
+                    case .santing: santing
+                    default: fortunes
+                    }
+                }
             }
-            .coordinateSpace(.named(Self.space))
-            .onAppear { go(proxy) }
-            .onChange(of: jump) { go(proxy) }
+            // 換區從最上面看起
+            .id(section)
         }
-    }
-
-    private func go(_ proxy: ScrollViewProxy) {
-        guard let target = jump else { return }
-        // 這一頁可能剛出現，等排好版再捲
-        DispatchQueue.main.async {
-            proxy.scrollTo(target, anchor: .top)
-            jump = nil
-        }
-    }
-
-    private func block<Content: View>(_ s: ReportSection, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Theme.group) {
-            if s.locked {
-                SectionTitle(s.title)
-                LockedSection(section: s)
-            } else {
-                content()
-            }
-        }
-        .background(alignment: .top) { marker(s) }
-        .id(s)
-    }
-
-    /// 這一區的開頭有沒有捲到上面。只在跨過那條線時更新，捲動中不會一直重畫
-    private func marker(_ s: ReportSection) -> some View {
-        GeometryReader { geo in
-            let passed = geo.frame(in: .named(Self.space)).minY < Theme.faceSwitch
-            Color.clear.onChange(of: passed, initial: true) { _, on in
-                if on { reached.insert(s) } else { reached.remove(s) }
-                let now = ReportSection.onFacePage.last { reached.contains($0) } ?? .palaces
-                if now != section { section = now }
-            }
-        }
-        .accessibilityHidden(true)
+        .background(Theme.canvas.ignoresSafeArea())
     }
 
     /// 區塊標題，旁邊一顆小圓鈕
@@ -73,7 +45,6 @@ struct FacePage: View {
             InfoButton(subject: text, note: note)
             Spacer(minLength: 0)
         }
-        .padding(.top, Theme.section - Theme.group)
         .padding(.horizontal, Theme.tight)
     }
 
@@ -92,7 +63,6 @@ struct FacePage: View {
 
     private var fortunes: some View {
         Group {
-            SectionTitle(ReportSection.palaces.title)
             Card {
                 ForEach(Array(report.fortunes.enumerated()), id: \.element.id) { i, x in
                     CardBlock(divider: i > 0) {

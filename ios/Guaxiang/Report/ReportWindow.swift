@@ -18,15 +18,13 @@ struct ReportWindow: View {
     /// 有沒有推入的頁，給外層決定要不要停掉左緣返回
     @Binding var pushed: Bool
     @State private var path: [ReportSection] = []
-    /// 從總覽點了一列，面相那一頁要捲到哪一區
-    @State private var jump: ReportSection?
 
     var body: some View {
         TabView(selection: selection) {
             stack(model.isSample ? "範例報告" : "你的報告", path: $path) { overview }
                 .tabItem { Label("總覽", systemImage: "doc.text") }
                 .tag(ReportTab.overview)
-            stack("面相") { FacePage(report: report, section: $section, jump: $jump) }
+            stack("面相") { FacePage(report: report, section: $section) }
                 .tabItem { Label("面相", systemImage: "face.smiling") }
                 .tag(ReportTab.face)
             stack("問古書") { ask }
@@ -178,7 +176,7 @@ struct ReportWindow: View {
             path.append(s)
             return
         }
-        jump = s
+        section = s
         tab = .face
     }
 

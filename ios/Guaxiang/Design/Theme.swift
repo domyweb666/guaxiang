@@ -120,8 +120,6 @@ enum Theme {
     static let windowOverlap: CGFloat = 64
     /// 照片下緣淡成底色的那一段有多高
     static let photoFade: CGFloat = 64
-    /// 「面相」那一頁，區塊開頭離視窗頂這麼近就算捲到那一區
-    static let faceSwitch: CGFloat = 140
     /// 照片最上面那層淡底，返回鈕和狀態列才看得清楚
     static let scrimOpacity: Double = 0.6
 
