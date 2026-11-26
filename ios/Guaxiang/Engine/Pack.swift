@@ -34,7 +34,7 @@ enum Pack {
         add(
             "這次沒看到的東西",
             "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看：" + unseen.joined(separator: "；")
-                + "。另外，古書的說法沒有經過科學驗證。",
+                + "。另外，古書的說法沒有人驗證過。",
             "cannot")
 
         if let wx = report.wuxing, let type = W.types[wx.host] {

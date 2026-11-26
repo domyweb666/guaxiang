@@ -147,7 +147,7 @@ struct ReportWindow: View {
             }
             .padding(.top, Theme.section - Theme.group)
 
-            Note("古書的說法沒有經過科學驗證。報告不判健康、壽命、災禍，也不評價人品，不能用來替你或別人做重大決定。")
+            Note("古書的說法沒有人驗證過，報告也不評價人品。不要拿它替你或別人做重大決定。")
                 .padding(.top, Theme.section - Theme.group)
                 .padding(.horizontal, Theme.tight)
         }

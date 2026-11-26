@@ -240,7 +240,7 @@ struct HomeView: View {
     }
 
     private var disclaimer: some View {
-        Note("這是傳統文化解讀，不是科學測量，也不能替你做任何重大決定。")
+        Note("這是傳統文化解讀，古書的說法沒有人驗證過，不能替你做任何重大決定。")
     }
 
     /// 示意圖和一句古書的白話（rules.json 三段那一條），原文在旁邊的小圓鈕裡

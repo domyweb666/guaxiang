@@ -848,7 +848,7 @@ function buildPack(profile){
   const W = RULES.wuxing, T = W.types, wx = R.wx;
   const pack = [];
   const add = (title, text, key) => { pack.push({ id: "E" + (pack.length + 1), title, text, key }); };
-  add("這次沒看到的東西", "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看：" + RULES.cannotSee.map(c => `${c.plain}（${c.name}）：${c.why}${c.yuanwen ? `（古書：${c.yuanwen}，白話：${c.baihua}）` : ""}`).join("；") + "。另外，古書的說法沒有經過科學驗證。", "cannot");
+  add("這次沒看到的東西", "這份報告只看臉的形狀（比例、長短、角度）。古書還要看的這些，這次都沒看：" + RULES.cannotSee.map(c => `${c.plain}（${c.name}）：${c.why}${c.yuanwen ? `（古書：${c.yuanwen}，白話：${c.baihua}）` : ""}`).join("；") + "。另外，古書的說法沒有人驗證過。", "cannot");
   add(`臉形：${wx.host}形人（${T[wx.host].plainShape}）`, `量測：臉長是寬的 ${R.F.face_aspect.v.toFixed(2)} 倍，額寬是下顎的 ${R.F.fore_jaw.v.toFixed(2)} 倍，下顎角 ${R.F.jaw_angle.v.toFixed(0)} 度。五形裡最接近${wx.host}形（${T[wx.host].plainShape}）${wx.guest ? `，也帶一點${wx.guest}形` : ""}${wx.weak ? "，但特徵不明顯" : ""}。用比例算哪一形是本工具暫定的算法；五行形本來要看全身和膚色，這裡只是臉形推估。\n古書：${T[wx.host].yuanwen}（白話：${T[wx.host].plainLine}）\n${W.notFaultPlain}\n${W.terms}${wx.rel ? "\n兼形（帶到的那一形）：" + wx.rel.lines.join(" ") : ""}\n出處：${W.source}`, "wuxing");
   add("五官怎麼算", W.guan + W.guanTerms + "「十年」只是概數。沒看的、在交界上的，都不能當成相符，也不能當成不同。", "guan");
   R.officials.forEach(x => {

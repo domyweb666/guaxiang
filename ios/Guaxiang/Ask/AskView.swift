@@ -255,7 +255,7 @@ struct AskView: View {
             }
             if (question as NSString).length >= Prompt.Limits.question { Note("最多 300 字。") }
             if let left = Paywall.questionsLeft { Note("還可以問 \(left) 題") }
-            if !typing { Note("古書的說法沒有經過科學驗證。").frame(maxWidth: .infinity) }
+            if !typing { Note("古書的說法沒有人驗證過。").frame(maxWidth: .infinity) }
         }
         .padding(.horizontal, Theme.screenMargin)
         .padding(.vertical, Theme.item)
