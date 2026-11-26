@@ -55,6 +55,12 @@ extension Report {
     /// 五官整體：古書怎麼說五官
     var officialsNote: BookNote { BookNote(title: "五官", plain: rules.wuxing.guan) }
 
+    /// 運勢整體：古書怎麼把人生的事放到臉上。只取 palacesNote 第一句，後面講相機量不量得到的不放（QC-0009）
+    var fortunesNote: BookNote {
+        let first = rules.palacesNote.components(separatedBy: "。").first ?? rules.palacesNote
+        return BookNote(title: "運勢", plain: first + "。", source: rules.palaces.first?.source)
+    }
+
     /// 臉的三段。沒拉髮際線的時候，放古書那一句
     var santingNote: BookNote? {
         (santingRule ?? rules.rules.first { $0.id == "santing-equal" }).map { BookNote.rule($0) }

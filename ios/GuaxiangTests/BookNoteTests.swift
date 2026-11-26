@@ -77,6 +77,7 @@ final class BookNoteTests: XCTestCase {
             for r in rules.rules { check(report.note(rule: r), "\(at)・\(r.id)") }
             check(report.officialsNote, "\(at)・五官")
             check(report.santingNote, "\(at)・三段")
+            check(report.fortunesNote, "\(at)・運勢")
             if report.wuxing != nil { check(report.wuxingNote, "\(at)・臉形") }
             if report.wuxing?.relation != nil { check(report.relationNote, "\(at)・兩種形") }
         }

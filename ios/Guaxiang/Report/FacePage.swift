@@ -21,6 +21,8 @@ struct FacePage: View {
                 if model.isSample {
                     Note("範例報告：數字是假的，不是你的臉。", warn: true)
                         .padding(.horizontal, Theme.tight)
+                        // 不要緊貼分段鈕
+                        .padding(.top, Theme.item)
                 }
                 if section.locked {
                     LockedSection(section: section)
@@ -63,6 +65,7 @@ struct FacePage: View {
 
     private var fortunes: some View {
         Group {
+            title(ReportSection.palaces.title) { report.fortunesNote }
             Card {
                 ForEach(Array(report.fortunes.enumerated()), id: \.element.id) { i, x in
                     CardBlock(divider: i > 0) {
