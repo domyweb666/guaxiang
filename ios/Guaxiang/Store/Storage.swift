@@ -155,21 +155,43 @@ enum Keychain {
 }
 
 /// 收費骨架（HANDOFF 第八節，2026-11-21 多米選「照建議先放骨架」）：
-/// 買斷解鎖完整報告、含 10 題問古書，之後題包加購。價格和免費版看得到什麼還沒定，
-/// 所以現在 enforced 是 false，全部功能開著；第 8 步接 StoreKit 時從這裡接。
+/// 買斷解鎖完整報告、含 10 題問古書，之後題包加購。
+/// 沒付費的人只能問 5 題（多米 2026-11-26 定）。這 5 題是總數，不是每天；買了再加 10 題。
+/// 價格還沒定、StoreKit 還沒接，所以現在 enforced 是 false，全部功能開著；第 8 步接 StoreKit 時從這裡接。
 enum Paywall {
     static let fullReportProductID = "org.domyweb.guaxiang.full"
     static let questionPackProductID = "org.domyweb.guaxiang.questions10"
+    static let freeQuestions = 5
     static let includedQuestions = 10
     static let enforced = false
+
+    /// 買了完整版沒有。第 8 步接 StoreKit 時改成讀購買紀錄
+    static var purchased: Bool { false }
 
     static var questionsAsked: Int {
         UserDefaults.standard.integer(forKey: Storage.Keys.questionsAsked)
     }
 
+    /// 總共能問幾題：免費 5 題，買了完整版再加 10 題
+    static func allowance(purchased: Bool) -> Int {
+        freeQuestions + (purchased ? includedQuestions : 0)
+    }
+
+    /// 還剩幾題，不會小於 0
+    static func left(asked: Int, purchased: Bool) -> Int {
+        max(0, allowance(purchased: purchased) - asked)
+    }
+
     /// 還能問幾題。nil 表示現在不限
     static var questionsLeft: Int? {
-        enforced ? max(0, includedQuestions - questionsAsked) : nil
+        enforced ? left(asked: questionsAsked, purchased: purchased) : nil
+    }
+
+    /// 題數用完時聊天裡顯示的那句。沒買的指向完整版，不寫價格
+    static var outOfQuestions: String {
+        purchased
+            ? "這份報告附的題數用完了。"
+            : "免費的 \(freeQuestions) 題問完了。買完整版可以再問 \(includedQuestions) 題。"
     }
 
     static var canSeeFullReport: Bool { true }

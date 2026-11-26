@@ -77,7 +77,7 @@ final class AskChat: ObservableObject {
     private func run(_ id: UUID) {
         guard let i = index(id) else { return }
         if let left = Paywall.questionsLeft, left <= 0 {
-            entries[i].error = "這份報告附的題數用完了。"
+            entries[i].error = Paywall.outOfQuestions
             save()
             return
         }
