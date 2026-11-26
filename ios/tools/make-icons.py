@@ -1,6 +1,7 @@
-# 從 repo 根目錄的 icon-512.png 做出 App 圖示（1024、不透明）和設定頁頁尾用的 Logo。
+# 從 repo 根目錄的圖示做出 App 圖示（1024、不透明）和設定頁頁尾用的 Logo。
 # 用法：python ios/tools/make-icons.py
-# 1024 是從 512 放大的，邊緣會糊一點；上架前請用 icon.svg 重新輸出一張 1024 換掉。
+# App 圖示優先用 icon-1024.png（從 icon.svg 直接輸出，2026-11-26 用 Edge 無頭模式截的，見 ios/tools/render-icon.sh）；
+# 沒有才退回把 icon-512.png 放大，邊緣會糊一點。
 import json
 import os
 import sys
@@ -25,7 +26,9 @@ def write(folder, name, contents):
 write(assets, "Contents.json", {"info": {"author": "xcode", "version": 1}})
 
 # App 圖示：鋪滿、不能有透明。角落透明的話用圖示正中上方的顏色補
-big = src.resize((1024, 1024), Image.LANCZOS)
+sharp = os.path.join(root, "icon-1024.png")
+big = Image.open(sharp).convert("RGBA") if os.path.exists(sharp) else src.resize((1024, 1024), Image.LANCZOS)
+print("App 圖示來源", "icon-1024.png" if os.path.exists(sharp) else "icon-512.png 放大")
 fill = src.getpixel((256, 40))[:3] if src.getpixel((2, 2))[3] < 255 else src.getpixel((2, 2))[:3]
 flat = Image.new("RGB", (1024, 1024), fill)
 flat.paste(big, (0, 0), big)
