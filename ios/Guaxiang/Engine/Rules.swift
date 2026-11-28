@@ -70,6 +70,8 @@ struct Condition: Decodable {
     let no: String?
     /// 剛好在交界上時，正面寫的白話
     let mid: String?
+    /// 古書要的樣子，例如「古書說眉毛要比眼睛長」。官的條件才有
+    let book: String?
     let type: String?
     /// 不畫刻度尺：原文沒有寫這個樣子，畫了會像古書說的
     let noRuler: Bool?
@@ -93,6 +95,8 @@ struct Official: Decodable, Identifiable {
     let terms: String
     let plain: String
     let governs: String
+    /// 官卡最上面那一句：古書說這一官管什麼
+    let means: String?
 }
 
 struct Rule: Decodable, Identifiable {

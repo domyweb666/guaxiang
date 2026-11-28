@@ -147,13 +147,18 @@ final class BookNoteTests: XCTestCase {
             texts += report.officials.flatMap { $0.rows.map(\.front) }
             texts += report.officials.compactMap(\.why)
             texts += [report.santingGood, report.santingFront, report.shapeName, report.shapeGood].compactMap { $0 }
+            texts += [report.fortunesIntro, report.officialsIntro, report.santingIntro]
+            texts += report.officials.compactMap { $0.verdictLine(rules.wuxing.guanGood) }
             texts += report.wuxing?.relation?.plain ?? []
         }
         for o in rules.officials {
-            texts += [o.plain, o.governs, o.baihua] + (o.notMeasured ?? [])
-            texts += o.conditions.flatMap { [$0.plain, $0.yes, $0.no].compactMap { $0 } }
+            texts += [o.plain, o.governs, o.baihua, o.means].compactMap { $0 } + (o.notMeasured ?? [])
+            texts += o.conditions.flatMap { [$0.plain, $0.yes, $0.no, $0.mid, $0.book].compactMap { $0 } }
         }
-        for g in rules.palaces { texts += [g.topic, g.place, g.baihua, g.why, g.notMeasured].compactMap { $0 } }
+        for g in rules.palaces {
+            texts += [g.topic, g.place, g.baihua, g.why, g.notMeasured].compactMap { $0 }
+            if let say = g.say { texts += [say.good, say.pass, say.fail, say.edge] }
+        }
         for r in rules.rules { texts += [r.baihua, r.headline, r.note].compactMap { $0 } }
         for c in rules.cannotSee { texts += [c.plain, c.why] }
 
@@ -168,6 +173,83 @@ final class BookNoteTests: XCTestCase {
             for term in terms { XCTAssertFalse(text.contains(term), "正面「\(text)」有術語「\(term)」") }
         }
         XCTAssertEqual([Status.pass, .fail, .edge, .unjudged].map(\.word), ["相符", "不同", "在交界上", "沒看"])
+    }
+
+    /// 每一條都講滿三件事：古書說什麼、你怎樣、這句算不算。「這次先不說」不准再出現（多米 11/28）
+    func testEveryLineSaysWhatItMeans() throws {
+        let rules = try loadRules()
+        for g in rules.palaces where g.measure != nil && g.measure?.type == nil {
+            let say = try XCTUnwrap(g.say, g.topic)
+            for text in [say.pass, say.fail, say.edge] {
+                XCTAssertTrue(text.hasPrefix("古書說"), "\(g.topic)：「\(text)」")
+                XCTAssertFalse(text.contains("這次先不說"), "\(g.topic)：「\(text)」")
+                XCTAssertTrue(text.contains(say.good.components(separatedBy: "，").first ?? say.good), "\(g.topic)：「\(text)」")
+            }
+            XCTAssertTrue(say.pass.contains("算在你身上"), g.topic)
+            XCTAssertTrue(say.fail.contains("不算在你身上"), g.topic)
+            XCTAssertTrue(say.edge.contains("只算一半"), g.topic)
+        }
+        for o in rules.officials {
+            XCTAssertFalse((o.means ?? "").isEmpty, "\(o.plain) 沒有 means")
+            for c in o.conditions {
+                XCTAssertFalse((c.mid ?? "").isEmpty, "\(o.plain)・\(c.plain ?? "")：沒有 mid")
+                XCTAssertTrue((c.book ?? "").hasPrefix("古書說"), "\(o.plain)・\(c.plain ?? "")：沒有 book")
+            }
+        }
+        for report in reports(rules) {
+            var texts = report.fortunes.map(\.front) + [report.santingFront]
+            for x in report.shownOfficials {
+                for row in x.rows where row.status != .unjudged {
+                    XCTAssertTrue(row.front.hasPrefix(row.condition.book ?? "-"), row.front)
+                    texts.append(row.front)
+                }
+                let verdict = x.verdictLine(rules.wuxing.guanGood)
+                XCTAssertEqual(verdict == nil, x.status == .unjudged, x.official.plain)
+                if let verdict {
+                    XCTAssertTrue(verdict.contains(rules.wuxing.guanGood), verdict)
+                    texts.append(verdict)
+                }
+            }
+            for text in texts { XCTAssertFalse(text.contains("這次先不說"), text) }
+        }
+    }
+
+    /// 「不同」只說這句好處不算，不說成壞事，也不跟別人比
+    func testDifferentIsNotBad() throws {
+        let rules = try loadRules()
+        var texts = rules.palaces.compactMap(\.say?.fail)
+        for report in reports(rules) {
+            texts += report.shownOfficials.filter { $0.status == .fail }.compactMap { $0.verdictLine(rules.wuxing.guanGood) }
+            texts += report.shownOfficials.flatMap { $0.rows.filter { $0.status == .fail }.map(\.front) }
+        }
+        XCTAssertFalse(texts.isEmpty)
+        for text in texts {
+            for word in ["不好", "壞", "很差", "辛苦", "大部分人", "一般人", "普通"] {
+                XCTAssertFalse(text.contains(word), "「\(text)」有「\(word)」")
+            }
+        }
+    }
+
+    /// 每一區最上面：這一區看什麼、這次量了幾樣，數字跟著資料走
+    func testSectionIntrosCountFromData() throws {
+        let rules = try loadRules()
+        let all = reports(rules)
+        XCTAssertTrue(all[0].officialsIntro.hasPrefix("這一區看眉毛、眼睛、鼻子、嘴巴 4 樣，這次量了 4 樣。"))
+        XCTAssertTrue(all[0].officialsIntro.hasSuffix(rules.wuxing.guan))
+        XCTAssertTrue(all[0].fortunesIntro.contains("錢財、整體運勢、兄弟朋友 3 件，這次量了 3 件"))
+        XCTAssertTrue(all[0].santingIntro.hasSuffix("這次量了 3 段。"))
+        // 沒拉髮際線
+        XCTAssertTrue(all[2].santingIntro.hasSuffix("這次沒量到。"))
+        // 勾了紋眉和鼻子動過：眉毛、鼻子沒看；運勢三件都沒看
+        XCTAssertTrue(all[3].officialsIntro.contains("這次量了 2 樣"), all[3].officialsIntro)
+        XCTAssertTrue(all[3].fortunesIntro.contains("這次量了 0 件"), all[3].fortunesIntro)
+        for report in all {
+            let seen = report.shownOfficials.filter { $0.status != .unjudged }.count
+            XCTAssertTrue(report.officialsIntro.contains("這次量了 \(seen) 樣"), report.officialsIntro)
+            let fortunes = report.fortunes.filter { $0.status != .unjudged }.count
+            XCTAssertTrue(report.fortunesIntro.contains("這次量了 \(fortunes) 件"), report.fortunesIntro)
+            for text in [report.officialsIntro, report.fortunesIntro, report.santingIntro] { clean(text, "區的開頭") }
+        }
     }
 
     func testLiunianLayerInPlainWords() throws {

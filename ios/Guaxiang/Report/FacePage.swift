@@ -57,6 +57,14 @@ struct FacePage: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// 每一區最上面那一句：這一區看什麼、這次量了幾樣
+    private func intro(_ text: String) -> some View {
+        Text(text)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.tight)
+    }
+
     @ViewBuilder private func shaky(_ unstable: Bool) -> some View {
         if unstable { Note("這一項不太穩，只當參考", warn: true) }
     }
@@ -66,6 +74,7 @@ struct FacePage: View {
     private var fortunes: some View {
         Group {
             title(ReportSection.palaces.title) { report.fortunesNote }
+            intro(report.fortunesIntro)
             Card {
                 ForEach(Array(report.fortunes.enumerated()), id: \.element.id) { i, x in
                     CardBlock(divider: i > 0) {
@@ -88,6 +97,7 @@ struct FacePage: View {
     private var officials: some View {
         Group {
             title(ReportSection.officials.title) { report.officialsNote }
+            intro(report.officialsIntro)
             if let names = report.goodOfficials {
                 VStack(alignment: .leading, spacing: Theme.tight) {
                     good(report.rules.wuxing.guanGood)
@@ -113,7 +123,16 @@ struct FacePage: View {
                     VerdictTag(status: x.status)
                 }
                 if x.status == .unjudged, let why = x.why { Note(why) }
+                // 古書說這一官管什麼
+                if let means = x.official.means { Text(means).fixedSize(horizontal: false, vertical: true) }
                 ForEach(Array(x.rows.enumerated()), id: \.offset) { _, row in rowLine(row) }
+                // 五官那句好處，這一官算不算
+                if let verdict = x.verdictLine(report.rules.wuxing.guanGood) {
+                    Text(verdict)
+                        .font(.body.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, Theme.tight)
+                }
             }
         }
     }
@@ -148,6 +167,7 @@ struct FacePage: View {
     private var santing: some View {
         Group {
             title(ReportSection.santing.title) { report.santingNote }
+            intro(report.santingIntro)
             Card {
                 CardBlock(divider: false) {
                     if let head = report.santingGood { good(head) }
