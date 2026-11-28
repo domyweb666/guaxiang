@@ -263,14 +263,14 @@ final class ManualMarksTests: XCTestCase {
         let data = try encoder.encode(old)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertNil(json["adjusted"], "沒調過不寫這一欄，檔案跟以前一樣")
-        let back = try decoder.decode(Measurement.self, from: data)
+        let back = try decoder.decode(Guaxiang.Measurement.self, from: data)
         XCTAssertEqual(back, old)
         XCTAssertNil(back.adjusted)
         XCTAssertEqual(back.adjustedCount, 0)
         // 有調過的存了再讀，還在
         var adjusted = old
         adjusted.adjusted = ["browTailR", "chin"]
-        let again = try decoder.decode(Measurement.self, from: encoder.encode(adjusted))
+        let again = try decoder.decode(Guaxiang.Measurement.self, from: encoder.encode(adjusted))
         XCTAssertEqual(again.adjustedCount, 2)
 
         let marks = try decoder.decode(
