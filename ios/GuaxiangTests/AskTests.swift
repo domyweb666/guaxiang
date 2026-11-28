@@ -155,6 +155,25 @@ final class AskTests: XCTestCase {
         XCTAssertEqual(p.filledCount, 1)
     }
 
+    /// 感情、孩子、兄弟姊妹三欄拿掉了（多米 11/28）：舊資料不送出、不算填了幾欄
+    func testRemovedFamilyFieldsNotSent() {
+        var p = Profile()
+        p.relation = "已婚"
+        p.kids = "有"
+        p.siblings = "獨生"
+        p.field = "餐飲"
+        let asked = p.forAsk()
+        XCTAssertEqual(asked.relation, "")
+        XCTAssertEqual(asked.kids, "")
+        XCTAssertEqual(asked.siblings, "")
+        let text = Prompt.profileText(asked)
+        XCTAssertFalse(text.contains("已婚"))
+        XCTAssertFalse(text.contains("獨生"))
+        XCTAssertFalse(text.contains("孩子"))
+        XCTAssertTrue(text.contains("餐飲"))
+        XCTAssertEqual(p.filledCount, 1)
+    }
+
     func testHistorySkipsFailedAndOfftopic() {
         let entries = [
             ChatEntry(q: "一", a: "答［E1］", pack: [], t: Date(), kind: .answer),
@@ -184,7 +203,7 @@ final class AskTests: XCTestCase {
         let p = try JSONDecoder().decode(Profile.self, from: Data(old.utf8))
         XCTAssertEqual(p, Profile(age: 34, gender: "男", relation: "其他", work: "上班族", intro: "想換工作"))
         XCTAssertEqual(p.currentAge(), 34)
-        XCTAssertEqual(p.filledCount, 4) // intro 那一欄拿掉了，不算
+        XCTAssertEqual(p.filledCount, 3) // intro、感情那兩欄拿掉了，不算
         let again = try JSONDecoder().decode(Profile.self, from: JSONEncoder().encode(p))
         XCTAssertEqual(again, p)
         XCTAssertTrue(try JSONDecoder().decode(Profile.self, from: Data("{}".utf8)).isEmpty)

@@ -25,20 +25,8 @@ struct ProfileView: View {
                 }
             }
 
-            SectionTitle("家人和感情")
-            Card {
-                CardBlock(divider: false) {
-                    single(
-                        "感情狀態", ["單身", "交往中", "已婚", "分居或離婚", "喪偶"], $profile.relation,
-                        "為什麼問：古書感情那一項原本是寫給已婚的人，照你的狀況換說法。")
-                }
-                CardBlock {
-                    single("孩子", ["沒有", "有"], $profile.kids, "為什麼問：古書有子女這一項，決定要不要講到。")
-                }
-                CardBlock {
-                    single("兄弟姊妹", ["獨生", "有"], $profile.siblings, "為什麼問：古書有兄弟朋友這一項，獨生的話只講朋友。")
-                }
-            }
+            // 「家人和感情」三欄拿掉（多米 11/28）：填了會被 AI 講回來，聽起來像從臉上看出來的。
+            // 舊版填過的看不到也改不了，不再送出去、不算填了幾欄（Profile.forAsk）
 
             SectionTitle("工作")
             Card {

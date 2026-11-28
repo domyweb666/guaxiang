@@ -69,7 +69,8 @@ struct Profile: Codable, Equatable {
 
     /// 填了幾欄，給設定頁那一列看
     var filledCount: Int {
-        let texts = [gender, relation, work, name, kids, siblings, field, answerLength]
+        // 感情、孩子、兄弟姊妹那三欄拿掉了（多米 11/28），舊資料不算
+        let texts = [gender, work, name, field, answerLength]
         let lists = [faceChanges]
         let hasAge = birthday != nil || age != nil
         return texts.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count + lists.filter { !$0.isEmpty }.count + (hasAge ? 1 : 0)
@@ -89,6 +90,10 @@ struct Profile: Codable, Equatable {
         out.topics = []
         out.events = []
         out.intro = ""
+        // 感情、孩子、兄弟姊妹也拿掉了（多米 11/28）：填了會被講回來，聽起來像從臉上看出來的
+        out.relation = ""
+        out.kids = ""
+        out.siblings = ""
         out.birthday = nil
         return out
     }
