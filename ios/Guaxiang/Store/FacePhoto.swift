@@ -11,10 +11,54 @@ struct PhotoMarks: Codable, Equatable {
     var lips: [UV] = []
     /// 使用者拉的髮際線高度。跳過就是 nil
     var hairY: Double?
+    /// 確認標註頁手動調過的點（LM 的名字）。2026-11-28 以前的檔案沒有這一欄，讀進來是 nil，當沒調過
+    var adjusted: [String]?
 
     subscript(_ lm: LM) -> UV? {
         get { points[lm.rawValue] }
         set { points[lm.rawValue] = newValue }
+    }
+
+    var adjustedCount: Int { adjusted?.count ?? 0 }
+
+    /// 這一點是從哪條輪廓上挑的（網格的點沒有輪廓，回傳空的）
+    func outline(for lm: LM) -> [UV] {
+        switch ManualMarks.source(lm) {
+        case .mesh: return []
+        case .brow: return brows.flatMap { $0 }
+        case .eye: return eyes.flatMap { $0 }
+        case .lips: return lips
+        }
+    }
+
+    /// 確認標註頁調過的點畫在調過的位置：網格的點直接換；輪廓上的點，把輪廓上原本那一點換成新位置
+    func applying(_ edits: MarkEdits) -> PhotoMarks {
+        var out = self
+        for lm in edits.adjusted {
+            guard let move = edits.moves[lm] else { continue }
+            switch ManualMarks.source(lm) {
+            case .mesh: out[lm] = move.to
+            case .brow: out.brows = Self.replacing(out.brows, from: move.from, to: move.to)
+            case .eye: out.eyes = Self.replacing(out.eyes, from: move.from, to: move.to)
+            case .lips: out.lips = Self.replacing([out.lips], from: move.from, to: move.to).first ?? out.lips
+            }
+        }
+        return out
+    }
+
+    /// 幾條輪廓裡離 from 最近的那一點換成 to
+    static func replacing(_ lists: [[UV]], from: UV, to: UV) -> [[UV]] {
+        var best: (i: Int, j: Int, d: Double)?
+        for (i, list) in lists.enumerated() {
+            for (j, p) in list.enumerated() {
+                let d = hypot(p.x - from.x, p.y - from.y)
+                if best == nil || d < best!.d { best = (i, j, d) }
+            }
+        }
+        guard let best else { return lists }
+        var out = lists
+        out[best.i][best.j] = to
+        return out
     }
 
     /// 全部要畫的點，算照片要裁多大用

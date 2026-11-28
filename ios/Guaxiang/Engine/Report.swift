@@ -12,6 +12,12 @@ struct Measurement: Codable, Equatable {
     var rulesVersion: String
     /// 這次哪些量測來源沒接上（例如眉毛和嘴唇的 2D 定位點），報告最下面會列出來
     var gaps: [String] = []
+    /// 確認標註頁手動調過哪些點（LM 的名字，例如 browTailR）。沒調就是 nil；
+    /// 2026-11-28 以前存的檔案沒有這一欄，讀進來也是 nil（選填欄位，讀舊檔不會失敗）
+    var adjusted: [String]? = nil
+
+    /// 手動調了幾個點
+    var adjustedCount: Int { adjusted?.count ?? 0 }
 }
 
 /// 一份報告：量測數字照規則比對完的全部結論。畫面和「問古書」的依據清單都從這裡拿。

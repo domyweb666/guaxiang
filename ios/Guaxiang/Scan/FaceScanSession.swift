@@ -18,6 +18,8 @@ struct BestShot {
     var frame: FaceFrame
     /// 量測點在照片上的位置，拉髮際線和報告最上面的標註用
     var marks: PhotoMarks
+    /// 這一張的網格：每個頂點在照片上（跟 marks 同一套座標）和臉平面上的位置。確認標註頁拖點時換算用
+    var mesh: PlaneMapper? = nil
 
     var glabella: UV? { marks[.glabella] }
     var subnasale: UV? { marks[.subnasale] }
@@ -259,7 +261,8 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
         if score < bestScore {
             bestScore = score
             best = BestShot(
-                image: makeImage(frame.capturedImage, orientation: display.orientation), frame: named, marks: marks)
+                image: makeImage(frame.capturedImage, orientation: display.orientation), frame: named, marks: marks,
+                mesh: PlaneMapper(pixels: pixels.map { display.displayPoint($0) }, face: facePoints))
         }
 
         let n = frames.count
@@ -267,9 +270,12 @@ final class FaceScanSession: NSObject, ObservableObject, ARSessionDelegate {
             collecting = false
             // 保險：照片跟標註對不上方向就轉正，免得拿躺著的照片拉髮際線
             if let image = shot.image {
+                // 網格的照片座標跟著同一個轉法轉（upright 裡挑轉法的是同一個函式）
+                let turn = shot.marks.turn(size: image.size)
                 let photo = FacePhoto(image: image, marks: shot.marks).upright()
                 shot.image = photo.image
                 shot.marks = photo.marks
+                shot.mesh = shot.mesh?.turned(turn)
             }
             var gaps: [String] = []
             if meshMap.isEmpty {

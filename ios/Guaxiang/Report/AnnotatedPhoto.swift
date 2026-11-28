@@ -61,7 +61,7 @@ struct AnnotatedPhoto: View {
         .animation(reduceMotion ? nil : Theme.transition, value: mode)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isImage)
-        .accessibilityLabel(label)
+        .accessibilityLabel(adjustedLine.map { label + "。" + $0 } ?? label)
     }
 
     private func marks(_ kind: MarkLayer.Kind, _ crop: CGRect) -> MarkLayer {
@@ -87,17 +87,27 @@ struct AnnotatedPhoto: View {
     }
 
     private var legend: some View {
-        HStack(spacing: Theme.group) {
-            key("眉", Theme.markBrow)
-            key("眼", Theme.markEye)
-            key("鼻", Theme.markNose)
-            key("嘴", Theme.markMouth)
-            key("三段分界", Theme.markLine)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: Theme.item) {
+            HStack(spacing: Theme.group) {
+                key("眉", Theme.markBrow)
+                key("眼", Theme.markEye)
+                key("鼻", Theme.markNose)
+                key("嘴", Theme.markMouth)
+                key("三段分界", Theme.markLine)
+                Spacer(minLength: 0)
+            }
+            .accessibilityHidden(true)
+            // 確認標註頁手動調過的點，照片上畫的是調過的位置
+            if let adjusted = adjustedLine { Note(adjusted) }
         }
         .padding(.horizontal, Theme.cardPad)
         .padding(.vertical, Theme.rowPadV)
-        .accessibilityHidden(true)
+    }
+
+    /// 「你手動調了 N 個點」。沒調、或之前版本掃的就沒有這一句
+    private var adjustedLine: String? {
+        let n = photo.marks.adjustedCount
+        return n > 0 ? "你手動調了 \(n) 個點" : nil
     }
 
     private func key(_ text: String, _ color: Color) -> some View {

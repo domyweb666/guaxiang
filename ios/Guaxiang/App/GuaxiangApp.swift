@@ -90,7 +90,7 @@ final class AppModel: ObservableObject {
 
     func scanFinished(_ result: ScanCapture) {
         capture = result
-        // 照片上找得到眉心和下巴才拉得了髮際線；找不到就直接出報告（三段寫沒看）
+        // 照片上找得到眉心和下巴才進確認標註頁（拉髮際線、拖點）；找不到就直接出報告（三段寫沒看）
         if result.best.image != nil, result.best.glabella != nil, result.best.chin != nil {
             path.append(.hairline)
         } else {
@@ -98,26 +98,31 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// 掃完、髮際線也拉完（或跳過）：算特徵、取中位數、比對規則、存檔
-    func finish(hairRatio: Double?, hairY: Double? = nil) {
+    /// 掃完、確認標註也看完（髮際線拉了或跳過、點調了或沒調）：套上調過的點、算特徵、取中位數、比對規則、存檔
+    func finish(hairRatio: Double?, hairY: Double? = nil, edits: MarkEdits? = nil) {
         guard let rules, let capture else {
             path = []
             return
         }
         // 公尺制：眼高的下限給 0.1 公釐
-        let perFrame = capture.frames.map { FeatureEngine.features($0, hairRatio: hairRatio, eps: 0.0001) }
-        let F = Stats.summarize(perFrame, rules: rules)
+        let F = ManualMarks.measure(capture.frames, edits: edits, hairRatio: hairRatio, eps: 0.0001, rules: rules)
+        let adjusted = (edits?.adjusted ?? []).map(\.rawValue)
         let measurement = Measurement(
             when: Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down)),
             frames: capture.frames.count, light: Stats.median(capture.lights),
             hasHair: hairRatio != nil && F["santing_U"] != nil, answers: answers, F: F,
-            rulesVersion: rules.version, gaps: capture.gaps)
-        show(measurement, photo: makePhoto(capture.best, measurement, hairY: hairY))
+            rulesVersion: rules.version, gaps: capture.gaps, adjusted: adjusted.isEmpty ? nil : adjusted)
+        show(measurement, photo: makePhoto(capture.best, measurement, hairY: hairY, edits: edits))
     }
 
-    private func makePhoto(_ best: BestShot, _ measurement: Measurement, hairY: Double?) -> FacePhoto? {
+    private func makePhoto(_ best: BestShot, _ measurement: Measurement, hairY: Double?, edits: MarkEdits?)
+        -> FacePhoto?
+    {
         guard let image = best.image else { return nil }
         var marks = best.marks
+        // 照片上的標註畫在調過的位置
+        if let edits { marks = marks.applying(edits) }
+        marks.adjusted = measurement.adjusted
         marks.when = measurement.when
         marks.hairY = measurement.hasHair ? hairY : nil
         return FacePhoto(image: image, marks: marks)
@@ -180,7 +185,7 @@ struct RootView: View {
                 switch route {
                 case .consent: ConsentView()
                 case .scan: ScanView()
-                case .hairline: HairlineView()
+                case .hairline: ConfirmMarksView()
                 case .report:
                     if let report = model.report { ReportView(report: report, openAt: model.openAt) }
                 }

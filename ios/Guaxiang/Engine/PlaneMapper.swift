@@ -92,6 +92,12 @@ struct PlaneMapper {
     private func cross(_ ax: Double, _ ay: Double, _ bx: Double, _ by: Double) -> Double {
         ax * by - ay * bx
     }
+
+    /// 照片轉了，畫面這一邊的座標跟著轉，臉平面那一邊不變。
+    /// 八種轉法都不改兩點之間的距離，所以挑到的頂點和內插結果跟轉之前一樣
+    func turned(_ d: Dihedral) -> PlaneMapper {
+        d == .identity ? self : PlaneMapper(pixels: pixels.map(d.apply), face: face)
+    }
 }
 
 /// 從輪廓點找出叫得出名字的點。Vision 給的是一圈輪廓，不保證哪一點是眉頭眉尾，所以用位置來認。
